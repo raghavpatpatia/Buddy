@@ -1,6 +1,6 @@
 import 'package:buddy_app/core/store.dart';
-import 'package:buddy_app/features/grow/math.dart';
-import 'package:buddy_app/features/grow/math_card.dart';
+import 'package:buddy_app/features/grow/model/math.dart';
+import 'package:buddy_app/features/grow/view/math_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

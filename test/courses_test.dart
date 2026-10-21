@@ -1,5 +1,6 @@
 import 'package:buddy_app/core/store.dart';
-import 'package:buddy_app/features/grow/courses.dart';
+import 'package:buddy_app/features/grow/model/course.dart';
+import 'package:buddy_app/features/grow/view/courses_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

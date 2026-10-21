@@ -1,7 +1,7 @@
-import 'package:buddy_app/features/money/mail.dart';
-import 'package:buddy_app/features/money/market.dart';
-import 'package:buddy_app/features/money/money_ui.dart';
-import 'package:buddy_app/features/money/parse.dart';
+import 'package:buddy_app/features/money/data/mail_service.dart';
+import 'package:buddy_app/features/money/model/market.dart';
+import 'package:buddy_app/features/money/view/widgets.dart';
+import 'package:buddy_app/features/money/data/parse.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -94,5 +94,12 @@ void main() {
       expect(out, contains('<a href="mailto:raghav@example.com">'));
       expect(out, contains('&lt;3'));
     });
+  });
+
+  test('1-year return works with a holiday-short year of 247 trading days', () {
+    final closes = [for (var i = 0; i < 247; i++) 100.0 + i];
+    final q = Quote('X.NS', 'X', 'INR', closes.last, 0, null, null, [for (var i = 0; i < 247; i++) DateTime(2026, 1, 1).add(Duration(days: i))], closes);
+    expect(q.ret(250), closeTo(246, 0.001));
+    expect(Quote('Y', 'Y', 'INR', 1, 0, null, null, const [], const []).ret(21), isNull);
   });
 }

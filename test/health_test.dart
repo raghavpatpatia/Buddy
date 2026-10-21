@@ -1,6 +1,6 @@
 import 'package:buddy_app/core/health.dart';
 import 'package:buddy_app/core/store.dart';
-import 'package:buddy_app/features/fit/workout_plan.dart';
+import 'package:buddy_app/features/health/model/workout_plan.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

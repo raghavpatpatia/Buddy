@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:buddy_app/features/astro/engine.dart';
+import 'package:buddy_app/features/astro/model/engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Reference values: Swiss Ephemeris 2.10 (Moshier), Lahiri sidereal. See test/fixtures/swisseph_lahiri.json.

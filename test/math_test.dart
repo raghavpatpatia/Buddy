@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:buddy_app/features/grow/math.dart';
+import 'package:buddy_app/features/grow/model/math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

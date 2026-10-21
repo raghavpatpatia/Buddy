@@ -55,6 +55,7 @@ class TickReceiver : android.content.BroadcastReceiver() {
         BuddyCore.checkWater(ctx)
         BuddyCore.checkGrowth(ctx)
         BuddyCore.checkBrief(ctx)
+        BuddyCore.checkScrollTracker(ctx)
         BuddyCore.refreshOngoing(ctx)
         if (BuddyCore.prefs(ctx).getBoolean("companion_on", false)) BuddyCore.startCompanion(ctx)
         else BuddyCore.scheduleTick(ctx)

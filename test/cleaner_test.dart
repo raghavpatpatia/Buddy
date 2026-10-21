@@ -1,6 +1,6 @@
 import 'dart:isolate';
 
-import 'package:buddy_app/core/cleaner.dart';
+import 'package:buddy_app/features/phone/data/cleaner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

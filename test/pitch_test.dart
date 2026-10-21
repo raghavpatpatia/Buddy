@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:buddy_app/features/grow/pitch.dart';
+import 'package:buddy_app/features/grow/data/pitch.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Flute-like tone: fundamental + weaker harmonics + a little noise.

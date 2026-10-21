@@ -37,14 +37,19 @@ class ScrollWatcherService : AccessibilityService() {
     )
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED) return
+        if (event == null) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg !in BuddyCore.SHORT_VIDEO_APPS) return
+        if (pkg in contentWatchedApps) {
+            if (event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED) onContentChange(pkg)
+            return
+        }
+        if (event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED) return
 
         val now = System.currentTimeMillis()
+        val idx = event.fromIndex
         // One physical swipe emits several scroll events; debounce.
         if (now - (lastAt[pkg] ?: 0) < 450) return
-        val idx = event.fromIndex
         if (idx >= 0 && lastIndex[pkg] == idx) return
         lastAt[pkg] = now
         lastIndex[pkg] = idx
@@ -93,6 +98,50 @@ class ScrollWatcherService : AccessibilityService() {
         }
         screenIsReel[pkg] = found
         return found
+    }
+
+    // YouTube's Shorts pager sends no scroll events, so a new Short is detected by its channel + title changing.
+    private val contentWatchedApps = setOf("com.google.android.youtube")
+    private val lastShortKey = HashMap<String, String?>()
+    private val contentCheckAt = HashMap<String, Long>()
+
+    private fun onContentChange(pkg: String) {
+        val now = System.currentTimeMillis()
+        if (now - (contentCheckAt[pkg] ?: 0) < 400) return
+        contentCheckAt[pkg] = now
+        val key = currentShortKey(pkg) ?: return // mid-swipe or not on Shorts: keep the last Short seen
+        val previous = lastShortKey[pkg]
+        lastShortKey[pkg] = key
+        if (previous != null && key != previous) {
+            BuddyCore.bump(this, "reels_${BuddyCore.today()}_$pkg")
+            onReelSwipe(now)
+        }
+    }
+
+    /** "@channel|title" of the Short on screen, or null when the full-screen Shorts player isn't showing. */
+    private fun currentShortKey(pkg: String): String? {
+        // YouTube draws Shorts in its own window, which often isn't the "active" one, so read every window of the app.
+        val roots = try { windows.mapNotNull { it.root }.filter { it.packageName?.toString() == pkg } } catch (_: Exception) { emptyList() }
+        if (roots.isEmpty()) return null
+        val queue = ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>().apply { addAll(roots) }
+        var player = false
+        val descs = ArrayList<String>()
+        var seen = 0
+        while (queue.isNotEmpty() && seen < 800) {
+            val n = queue.removeFirst()
+            seen++
+            if (n.viewIdResourceName?.contains("reel_watch_player") == true) player = true
+            // Pre-loaded neighbouring Shorts sit in the tree off screen; only read text that's actually visible.
+            if (n.isVisibleToUser) n.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { descs.add(it) }
+            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        }
+        if (!player) return null
+        val channel = descs.indexOfFirst { Regex("@[\\w.\\-]+").containsMatchIn(it) }
+        // Ads and some Shorts show no channel handle; fall back to the video's length from the progress text.
+        if (channel < 0) return descs.firstOrNull { it.contains(" of ") && it.any(Char::isDigit) }?.let { "len:" + it.substringAfterLast(" of ") }
+        val handle = Regex("@[\\w.\\-]+").find(descs[channel])!!.value
+        val title = descs.drop(channel + 1).firstOrNull { !it.contains(handle) } ?: ""
+        return "$handle|$title"
     }
 
     private fun onReelSwipe(now: Long) {

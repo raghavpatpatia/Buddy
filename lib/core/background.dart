@@ -6,9 +6,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:workmanager/workmanager.dart';
 
-import '../features/brief.dart';
-import '../features/money/tracking.dart';
-import 'cleaner.dart';
+import '../features/home/data/brief_service.dart';
+import '../features/money/data/read_tracker.dart';
+import '../features/phone/data/cleaner.dart';
+import 'format.dart';
 import 'store.dart';
 
 const _tickTask = 'buddyTick';
@@ -23,7 +24,7 @@ void callbackDispatcher() {
     await Store.init();
     if (task == _mailTask) {
       try {
-        await MailTracker.poll();
+        await ReadTracker.instance.poll();
       } catch (_) {}
       return true;
     }

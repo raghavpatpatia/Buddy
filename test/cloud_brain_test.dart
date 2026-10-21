@@ -1,5 +1,5 @@
 import 'package:buddy_app/core/store.dart';
-import 'package:buddy_app/features/talk/cloud_brain.dart';
+import 'package:buddy_app/features/talk/data/cloud_brain.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

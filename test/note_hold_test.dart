@@ -1,4 +1,4 @@
-import 'package:buddy_app/features/grow/pitch.dart';
+import 'package:buddy_app/features/grow/data/pitch.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -87,6 +87,21 @@ object BuddyCore {
         return PendingIntent.getActivity(ctx, 0, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
+    /** Whether the scroll-tracker accessibility service is switched on (Android may store a short or long name). */
+    fun scrollTrackerOn(ctx: Context): Boolean {
+        val enabled = android.provider.Settings.Secure.getString(ctx.contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        val me = android.content.ComponentName(ctx, ScrollWatcherService::class.java)
+        return enabled.split(':').any { android.content.ComponentName.unflattenFromString(it.trim()) == me }
+    }
+
+    /** Once a day, tells the user if Android has switched the scroll tracker off. */
+    fun checkScrollTracker(ctx: Context) {
+        val p = prefs(ctx)
+        if (!p.getBoolean("setup_done", false) || scrollTrackerOn(ctx) || p.getString("tracker_off_notified", "") == today()) return
+        p.edit().putString("tracker_off_notified", today()).apply()
+        nudge(ctx, ID_SCROLL, "Scroll tracking is off", "Android switched off Buddy's scroll tracker, so Reels and Shorts aren't being counted. Tap, then Phone → Scroll → Turn on.")
+    }
+
     fun nudge(ctx: Context, id: Int, title: String, text: String) {
         ensureChannels(ctx)
         val n = NotificationCompat.Builder(ctx, CH_NUDGE)

@@ -1,6 +1,6 @@
 import 'package:buddy_app/core/store.dart';
-import 'package:buddy_app/features/talk/brain.dart';
-import 'package:buddy_app/features/talk/wisdom.dart';
+import 'package:buddy_app/features/talk/data/prompts.dart';
+import 'package:buddy_app/features/talk/data/wisdom.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -64,5 +64,18 @@ void main() {
   test('offline coding reply no longer blames a missing coding brain', () {
     final r = offlineReply('Flutter setState not updating', const [], coding: true);
     expect(r.toLowerCase(), isNot(contains('coding brain')));
+  });
+
+  test('refusals from the small model are detected, real answers are not', () {
+    expect(isRefusal("I'm sorry, but I can't assist with that. If you have any questions, feel free to ask."), isTrue);
+    expect(isRefusal('Sorry, I am unable to help with that request.'), isTrue);
+    expect(isRefusal('As an AI, I cannot provide financial advice.'), isTrue);
+    expect(isRefusal('Save 20% first, then spend: set up a SIP on payday.'), isFalse);
+    expect(isRefusal("I'm sorry you feel stressed. Take one slow breath."), isFalse);
+  });
+
+  test('no scripture is attached to unrelated questions', () {
+    expect(retrieve('Explain photosynthesis simply', fallback: false), isEmpty);
+    expect(retrieve('I feel stressed about work', fallback: false), isNotEmpty);
   });
 }

@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Buddy read-receipt tracker (DynamoDB + Lambda + public function URL). deploy.sh uploads the real code.
+
+Parameters:
+  ReadKey:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+
+Resources:
+  Opens:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: buddy-mail-opens
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: id, AttributeType: S }]
+      KeySchema: [{ AttributeName: id, KeyType: HASH }]
+      TimeToLiveSpecification: { AttributeName: expires, Enabled: true }
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{ Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
+      Policies:
+        - PolicyName: opens-table
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement: [{ Effect: Allow, Action: [dynamodb:UpdateItem, dynamodb:BatchGetItem], Resource: !GetAtt Opens.Arn }]
+
+  Tracker:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: buddy-mail-tracker
+      Runtime: python3.13
+      Handler: app.handler
+      Role: !GetAtt Role.Arn
+      Timeout: 10
+      MemorySize: 128
+      Environment: { Variables: { TABLE: !Ref Opens, KEY: !Ref ReadKey } }
+      Code:
+        ZipFile: "def handler(e, c): return {'statusCode': 503, 'body': 'deploying'}"
+
+  TrackerUrl:
+    Type: AWS::Lambda::Url
+    Properties: { TargetFunctionArn: !Ref Tracker, AuthType: NONE }
+
+  PublicUrl:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Tracker
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  PublicInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Tracker
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  Url:
+    Value: !GetAtt TrackerUrl.FunctionUrl

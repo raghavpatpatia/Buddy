@@ -1,4 +1,4 @@
-import 'package:buddy_app/features/astro/jyotish.dart';
+import 'package:buddy_app/features/astro/model/jyotish.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

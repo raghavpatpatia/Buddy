@@ -1,17 +1,246 @@
-# buddy_app
+# Buddy
 
-A new Flutter project.
+A personal wellbeing companion for Android, built with Flutter. It has five tabs:
 
-## Getting Started
+- **Buddy:** quests, water, mood and talk.
+- **Grow:** learn, practice, news, courses and stars.
+- **Health:** workouts, body and food.
+- **Money:** spend, invest and mail.
+- **Phone:** scroll tracking and the storage cleaner.
 
-This project is a starting point for a Flutter application.
+Most work happens on the phone. Talk uses an on-device LLM, and the cloud brain (AWS Bedrock) is optional and capped by spend limits. A small optional AWS backend logs read receipts for mail you send.
 
-A few resources to get you started if this is your first Flutter project:
+## Project layout
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```
+lib/
+  main.dart              entry point only
+  app/                   BuddyApp, HomeShell, tab sections
+  core/                  app-wide services: Store, Native channel, background jobs, formatting
+    arch/                generic building blocks: EventBus, LoadState, AsyncController,
+                         Repository, PrefsRepository, LruCache, SafeNotifier
+  shared/                reusable widgets (ui, bot face, celebrate)
+  features/<feature>/    astro, grow, health, home, money, phone, settings, talk
+    model/               plain data + pure logic (no Flutter, no I/O)
+    data/                I/O: prefs, HTTP, IMAP/SMTP, native, model files
+    controller/          ChangeNotifier state holders (one job each)
+    view/                widgets; read controllers via ListenableBuilder
+android/app/src/main/kotlin/com/raghav/buddy_app/
+  MainActivity.kt        wires the buddy/native channel
+  channel/               one handler per domain (command pattern)
+  BuddyCore.kt           reminders, notifications, scroll counters
+  ScrollWatcherService   accessibility service that counts reels/shorts
+server/tracker/          read-receipt backend (Lambda + DynamoDB, CloudFormation)
+test/                    unit + widget tests
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Architecture
+
+### Layers (MVC)
+
+Dependencies point one way only: view → controller → data → model. Views never call data services directly, and models know nothing about Flutter.
+
+```mermaid
+flowchart LR
+  subgraph View
+    W[Widgets<br/>ListenableBuilder]
+  end
+  subgraph Controller
+    C[Controllers<br/>SafeNotifier / AsyncController]
+  end
+  subgraph Data
+    R[Repositories<br/>PrefsRepository]
+    S[Services<br/>HTTP · IMAP · Native · LocalBrain]
+  end
+  subgraph Model
+    M[Plain data + pure logic]
+  end
+  W -- user action --> C
+  C -- notifyListeners --> W
+  C --> R & S
+  R & S --> M
+  C --> M
+  S <-- MethodChannel buddy/native --> K[Kotlin handlers]
+```
+
+### Generic building blocks (`lib/core/arch`)
+
+```mermaid
+classDiagram
+  class SafeNotifier {
+    +notifyListeners() no-op after dispose
+  }
+  class AsyncController~T~ {
+    +LoadState~T~ state
+    #run(load, errorText) newest load wins
+  }
+  class LoadState~T~ {
+    <<sealed>>
+  }
+  class Idle~T~
+  class Loading~T~
+  class Ready~T~ {
+    +T value
+  }
+  class Failed~T~ {
+    +String message
+    +T? previous
+  }
+  class Repository~K,T~ {
+    <<interface>>
+    +all Iterable~T~
+    +contains(K) bool
+    +put(T)
+    +remove(K)
+    +reload()
+  }
+  class PrefsRepository~K,T~ {
+    +JsonCodec~T~ codec
+  }
+  class EventBus {
+    +on~E~() Stream~E~
+    +emit(Object)
+  }
+  class LruCache~K,V~
+  ChangeNotifier <|-- SafeNotifier
+  SafeNotifier <|-- AsyncController
+  AsyncController --> LoadState
+  LoadState <|-- Idle
+  LoadState <|-- Loading
+  LoadState <|-- Ready
+  LoadState <|-- Failed
+  Repository <|.. PrefsRepository
+  ChangeNotifier <|-- PrefsRepository
+```
+
+| Pattern | Where |
+|---|---|
+| Observer | `SafeNotifier`/`ChangeNotifier` controllers and `PrefsRepository`, watched by `ListenableBuilder`; `EventBus` for cross-feature events (`MailOpened`) |
+| State | `LoadState` (Idle → Loading → Ready/Failed), `TalkPhase`, `PracticePhase`, `SessionPhase`, `ScanStatus`, `MailMode` |
+| Chain of Responsibility | Talk `ReplyChain`: Cloud → Local → Offline |
+| Strategy | Money `TxnSource`: `SmsTxnSource`, `EmailTxnSource` |
+| Repository | `Repository<K,T>` with `PrefsRepository` + `JsonCodec<T>` |
+| Command | Kotlin `ChannelHandler` routes: method name → action |
+| Singleton | `Store`, `Native`, `LocalBrain`, `CloudBrain`, `ModelDownloads` |
+
+### Async loading: newest load wins
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Loading: run()
+  Loading --> Ready: load ok
+  Loading --> Failed: load throws
+  Ready --> Loading: reload
+  Failed --> Loading: retry
+  note right of Loading
+    A newer run() replaces the ticket.
+    Results from older loads are dropped.
+  end note
+```
+
+### Talk: who answers
+
+```mermaid
+flowchart TD
+  Q[User message] --> TC[TalkController<br/>TalkPhase]
+  TC --> RC[ReplyChain]
+  RC --> C{Cloud brain on<br/>and under limits?}
+  C -- yes --> CB[CloudReplySource<br/>Bedrock]
+  C -- no / fails --> L{Local model<br/>downloaded?}
+  L -- yes --> LB[LocalReplySource<br/>LiteRT on-device]
+  L -- no / empty / refusal --> O[OfflineReplySource<br/>canned wisdom]
+  CB & LB & O --> TC
+```
+
+### Money: data flow and privacy
+
+```mermaid
+flowchart LR
+  SMS[Bank SMS<br/>business senders only] --> SH[Kotlin SmsHandler]
+  SH --> P[parse.dart<br/>amount · debit/credit · date · bank]
+  MAIL[Bank email<br/>IMAP] --> P
+  P --> ST[MoneyStore]
+  ST --> SC[SpendController] --> SV[Spend view]
+  SC -- totals only --> AI[AI insight]
+  YF[Yahoo Finance] --> IC[Invest / Stock controllers] --> IV[Invest view]
+  MC[MailController<br/>MailMode] --> MV[Mail · Reader · Compose]
+  MC <--> IMAP[(IMAP / SMTP<br/>app password in secure storage)]
+```
+
+Rules enforced in code:
+
+- SMS from phone numbers (people) are never read.
+- Only the amount, direction, date and bank are kept.
+- The AI sees totals only.
+- Sending or deleting mail always asks first.
+
+### Native bridge (Kotlin)
+
+```mermaid
+flowchart LR
+  D[Dart Native] -- buddy/native --> R[NativeRouter]
+  R --> PH[PermissionHandler<br/>permissions · open]
+  R --> RH[ReminderHandler<br/>companion · water · brief · growth]
+  R --> SCH[ScrollHandler<br/>scroll stats · usage today]
+  R --> STH[StorageHandler<br/>media files · app insights · thumbs]
+  R --> SMH[SmsHandler<br/>bank SMS]
+  SCH & STH & SMH -. slow work .-> BG[Background pool<br/>result posted on main thread]
+  WS[ScrollWatcherService] --> BC[BuddyCore prefs counters]
+  BC --> SCH
+```
+
+## Backend: read-receipt tracker
+
+Optional. It runs in your own AWS account and fits the free tier. It stores only the open time and the user agent, and records expire after 90 days.
+
+```mermaid
+sequenceDiagram
+  participant App as Buddy (Compose)
+  participant Mail as Recipient mail client
+  participant L as Lambda URL (app.py → routes.py)
+  participant DB as DynamoDB buddy-mail-opens
+  App->>Mail: email with 1x1 pixel /o/<id>.gif
+  Mail->>L: GET /o/<id>.gif
+  L->>DB: append open (max 50, TTL 90 days)
+  L-->>Mail: transparent GIF, no-store
+  loop every 15 min (background job)
+    App->>L: GET /s?ids=… + x-buddy-key
+    L->>DB: BatchGetItem
+    L-->>App: opens per id
+  end
+  App->>App: notification + EventBus MailOpened → MailController refreshes
+```
+
+```
+server/tracker/
+  src/app.py        Lambda entry: wires DynamoOpensStore into the router
+  src/routes.py     HTTP layer: /o/<id>.gif and /s
+  src/store.py      DynamoOpensStore (DynamoDB access)
+  tests/            unittest with an in-memory store, no AWS needed
+  template.yaml     CloudFormation: table, role, function, public URL
+  deploy.sh         runs tests, deploys stack, uploads code, writes setup file
+```
+
+To deploy, run `aws login`, then:
+
+```sh
+server/tracker/deploy.sh
+adb push /tmp/buddy_tracker.txt /sdcard/Download/
+```
+
+Buddy imports the setup file and then deletes it.
+
+## Build and test
+
+```sh
+flutter analyze
+flutter test                                    # Dart unit + widget tests
+python3 -m unittest discover -s server/tracker/tests
+flutter build apk --release --build-number <N>  # N must be above the installed build
+```
+
+Notes for testing on a device:
+
+- On-device models go in `Download/BuddyModels/`. Talk works without them and uses the offline replies.
+- Do not `am force-stop` the app during testing. Android then turns off the scroll-tracker accessibility service.
