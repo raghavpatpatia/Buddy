@@ -183,7 +183,7 @@ class _InvestPageState extends State<InvestPage> {
                 child: Row(children: [
                   Icon(Icons.search, color: cs.onSurfaceVariant),
                   const SizedBox(width: 12),
-                  Text('Search stocks, ETFs · NSE, BSE, US', style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
+                  Expanded(child: Text('Search stocks & ETFs · NSE, BSE, US', maxLines: 1, overflow: TextOverflow.ellipsis, style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant))),
                 ]),
               ),
             ),
@@ -264,9 +264,9 @@ class _InvestPageState extends State<InvestPage> {
           SegmentedButton<String>(
             showSelectedIcon: false,
             segments: const [
-              ButtonSegment(value: 'low', label: Text('Safe'), icon: Icon(Icons.shield_outlined, size: 16)),
-              ButtonSegment(value: 'medium', label: Text('Balanced'), icon: Icon(Icons.balance, size: 16)),
-              ButtonSegment(value: 'high', label: Text('Bold'), icon: Icon(Icons.rocket_launch_outlined, size: 16)),
+              ButtonSegment(value: 'low', label: Text('🛡️ Safe')),
+              ButtonSegment(value: 'medium', label: Text('⚖️ Balanced')),
+              ButtonSegment(value: 'high', label: Text('🚀 Bold')),
             ],
             selected: {Market.risk},
             onSelectionChanged: (v) async {

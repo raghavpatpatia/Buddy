@@ -7,10 +7,12 @@ import 'package:pedometer/pedometer.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../features/brief.dart';
+import '../features/money/tracking.dart';
 import 'cleaner.dart';
 import 'store.dart';
 
 const _tickTask = 'buddyTick';
+const _mailTask = 'buddyMailOpens';
 
 /// Runs every 1-2 h even when the app is closed (WorkManager, survives reboots).
 @pragma('vm:entry-point')
@@ -19,6 +21,12 @@ void callbackDispatcher() {
     WidgetsFlutterBinding.ensureInitialized();
     DartPluginRegistrant.ensureInitialized();
     await Store.init();
+    if (task == _mailTask) {
+      try {
+        await MailTracker.poll();
+      } catch (_) {}
+      return true;
+    }
     try {
       await prepareBrief();
     } catch (_) {}
@@ -41,6 +49,14 @@ Future<void> registerBackgroundJobs() async {
     flexInterval: const Duration(minutes: 50), // => runs once somewhere every 1-2 h
     existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
     constraints: Constraints(requiresBatteryNotLow: true),
+  );
+  // Read receipts: check every 15 min (Android's minimum) for opens of emails sent with Buddy.
+  await Workmanager().registerPeriodicTask(
+    'buddy-mail-opens',
+    _mailTask,
+    frequency: const Duration(minutes: 15),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+    constraints: Constraints(networkType: NetworkType.connected),
   );
 }
 

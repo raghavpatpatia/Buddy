@@ -1,3 +1,4 @@
+import 'package:buddy_app/features/money/mail.dart';
 import 'package:buddy_app/features/money/market.dart';
 import 'package:buddy_app/features/money/money_ui.dart';
 import 'package:buddy_app/features/money/parse.dart';
@@ -56,5 +57,42 @@ void main() {
     expect(up.score, greaterThan(65));
     expect(down.score, lessThan(45));
     expect(down.bad, isNotEmpty);
+  });
+
+  test('email HTML becomes readable text with paragraphs and links', () {
+    const html = '<html><head><style>p{color:red}</style></head><body><div>Hi Raghav,</div><p>Your order &amp; invoice are ready.&nbsp;Total: &#8377;1,299</p>'
+        '<ul><li>Item one</li><li>Item two</li></ul><a href="https://example.com/track">Track order</a><br>Thanks</body></html>';
+    final t = MailService.htmlToText(html);
+    expect(t, contains('Hi Raghav,'));
+    expect(t, contains('Your order & invoice are ready. Total: ₹1,299'));
+    expect(t, contains('• Item one'));
+    expect(t, contains('Track order (https://example.com/track)'));
+    expect(t, isNot(contains('color:red')));
+    expect(t, isNot(contains('<')));
+  });
+
+  group('email renderer', () {
+    test('keeps real images, embeds inline cid images, blocks trackers and scripts', () {
+      const html = '<p onclick="steal()">Hi</p><img src="https://cdn.shop.com/banner.jpg" width="600">'
+          '<img src="https://t.sendgrid.net/wf/open?upn=abc" width="1" height="1">'
+          '<img src="https://mailtrack.io/trace/mail/xyz.png">'
+          '<img src="cid:logo@123"><a href="javascript:alert(1)">x</a><script>bad()</script>';
+      final (out, blocked) = MailService.prepareEmailHtml(html, null, {'logo@123': 'data:image/png;base64,AAA'});
+      expect(out, contains('https://cdn.shop.com/banner.jpg'));
+      expect(out, contains('data:image/png;base64,AAA'));
+      expect(out, isNot(contains('sendgrid')));
+      expect(out, isNot(contains('mailtrack')));
+      expect(blocked, 2);
+      expect(out, isNot(contains('onclick')));
+      expect(out, isNot(contains('javascript:')));
+      expect(out, isNot(contains('bad()')));
+    });
+
+    test('plain-text emails get clickable links and mailto addresses', () {
+      final (out, _) = MailService.prepareEmailHtml(null, 'Docs: https://example.com/a?b=1\nMail me at raghav@example.com <3', const {});
+      expect(out, contains('<a href="https://example.com/a?b=1">'));
+      expect(out, contains('<a href="mailto:raghav@example.com">'));
+      expect(out, contains('&lt;3'));
+    });
   });
 }

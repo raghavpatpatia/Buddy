@@ -11,6 +11,7 @@ import 'features/buddy_page.dart';
 import 'features/brief.dart';
 import 'features/celebrate.dart';
 import 'features/grow/growth.dart';
+import 'features/money/tracking.dart';
 import 'features/sections.dart';
 import 'features/setup_page.dart';
 import 'features/ui.dart';
@@ -89,6 +90,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final missed = await Store.applyMissedGrowthPenalties();
     await syncGrowth();
     await syncBrief();
+    // Read tracking: import the setup file once (if the deploy script left one) and check for new opens.
+    unawaited(MailTracker.importSetupFile().then((_) => MailTracker.poll()).then((_) {}, onError: (_) {}));
     final last = DateTime.tryParse(Store.raw.getString('brief_prepared_at') ?? '');
     if (last == null || DateTime.now().difference(last).inMinutes > 60) {
       await Store.raw.setString('brief_prepared_at', DateTime.now().toIso8601String());

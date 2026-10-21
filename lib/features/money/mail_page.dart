@@ -1,11 +1,19 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/cleaner.dart' show fmtBytes;
 import '../../core/store.dart';
 import '../ui.dart';
 import 'mail.dart';
 import 'money_ui.dart';
+import 'tracking.dart';
 
 /// Link (or change) the email account: address + app password, verified before saving.
 Future<void> showMailConnect(BuildContext context) => showModalBottomSheet(context: context, isScrollControlled: true, builder: (_) => const _ConnectSheet());
@@ -137,7 +145,54 @@ class _MailPageState extends State<MailPage> {
   List<MailItem>? _items;
   String? _error;
   final _sel = <int>{};
-  bool _loading = false;
+  bool _loading = false, _sentView = false, _polling = false;
+
+  Future<void> _pollOpens() async {
+    setState(() => _polling = true);
+    try {
+      await MailTracker.poll(notify: false);
+    } catch (_) {}
+    if (mounted) setState(() => _polling = false);
+  }
+
+  List<Widget> _sentList(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    if (!MailTracker.ready) {
+      return [
+        const SizedBox(height: 16),
+        const EmptyState(emoji: '👀', title: 'Read tracking isn’t set up yet', subtitle: 'It needs a one-time setup of a tiny tracker on your AWS account (free tier). Once done, emails you send from Buddy show ✓✓ when opened, and you get a notification.'),
+      ];
+    }
+    final sent = MailTracker.sent;
+    return [
+      if (_polling) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator()),
+      if (sent.isEmpty) const EmptyState(emoji: '📤', title: 'No tracked emails yet', subtitle: 'Send an email from Buddy with “Tell me when it’s opened” on.'),
+      for (final t in sent)
+        Card(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          child: ListTile(
+            leading: Icon(t.opens.isEmpty ? Icons.done : Icons.done_all, color: t.opens.isEmpty ? cs.outline : cs.primary),
+            title: Text(t.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+              t.opens.isEmpty
+                  ? 'To ${t.to} · not opened yet'
+                  : 'Opened ${t.opens.length > 1 ? '${t.opens.length}× · last ' : ''}${_short(t.opens.last)} ${_time(t.opens.last)}${t.viaGmail ? ' · Gmail' : ''}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(_short(t.sentAt), style: tt.labelSmall),
+          ),
+        ),
+      if (sent.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Text('Opens are a strong signal, not proof: some apps block images, Apple Mail may preload them.', textAlign: TextAlign.center, style: tt.labelSmall),
+        ),
+    ];
+  }
+
+  static String _time(DateTime d) => '${d.hour % 12 == 0 ? 12 : d.hour % 12}:${d.minute.toString().padLeft(2, '0')} ${d.hour < 12 ? 'AM' : 'PM'}';
 
   @override
   void initState() {
@@ -241,7 +296,7 @@ class _MailPageState extends State<MailPage> {
         Text('Nothing is ever sent or deleted without your confirmation.', textAlign: TextAlign.center, style: tt.bodySmall),
       ]);
     }
-    final items = _items ?? const <MailItem>[];
+    final items = _sentView ? const <MailItem>[] : (_items ?? const <MailItem>[]);
     final selecting = _sel.isNotEmpty;
     return Scaffold(
       floatingActionButton: selecting
@@ -266,7 +321,7 @@ class _MailPageState extends State<MailPage> {
               ),
             ),
       body: RefreshIndicator(
-        onRefresh: () => _load(_filter < 0 ? null : _filters[_filter].$2),
+        onRefresh: () => _sentView ? _pollOpens() : _load(_filter < 0 ? null : _filters[_filter].$2),
         child: ListView(padding: pagePadding.copyWith(bottom: 96), children: [
           Row(children: [
             CircleAvatar(radius: 16, backgroundColor: cs.primaryContainer, child: Text(MailAccount.address![0].toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800))),
@@ -278,21 +333,42 @@ class _MailPageState extends State<MailPage> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              for (final (i, f) in _filters.indexed)
+              for (final (i, f) in _filters.indexed) ...[
                 if (i == 0 || MailAccount.isGmail)
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
                       label: Text(f.$1),
-                      selected: _filter == i,
+                      selected: _filter == i && !_sentView,
                       onSelected: (_) {
-                        setState(() => _filter = i);
+                        setState(() {
+                          _filter = i;
+                          _sentView = false;
+                        });
                         _load();
                       },
                     ),
                   ),
+                if (i == 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      avatar: const Icon(Icons.done_all, size: 16),
+                      label: const Text('Sent'),
+                      selected: _sentView,
+                      onSelected: (_) {
+                        setState(() {
+                          _sentView = true;
+                          _sel.clear();
+                        });
+                        _pollOpens();
+                      },
+                    ),
+                  ),
+              ],
             ]),
           ),
+          if (_sentView) ..._sentList(context),
           if (_filter > 0 && items.isNotEmpty && !selecting)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -303,9 +379,9 @@ class _MailPageState extends State<MailPage> {
                 onTap: () => setState(() => _sel.addAll(items.map((m) => m.uid))),
               ),
             ),
-          if (_loading) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
-          if (_error != null) EmptyState(emoji: '📡', title: 'Offline?', subtitle: _error!),
-          if (!_loading && _error == null && items.isEmpty) const EmptyState(emoji: '✨', title: 'Nothing here', subtitle: 'Inbox zero vibes.'),
+          if (_loading && !_sentView) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
+          if (_error != null && !_sentView) EmptyState(emoji: '📡', title: 'Offline?', subtitle: _error!),
+          if (!_sentView && !_loading && _error == null && items.isEmpty) const EmptyState(emoji: '✨', title: 'Nothing here', subtitle: 'Inbox zero vibes.'),
           for (final m in items)
             Card(
               margin: const EdgeInsets.symmetric(vertical: 2),
@@ -315,7 +391,21 @@ class _MailPageState extends State<MailPage> {
                   HapticFeedback.selectionClick();
                   setState(() => _sel.contains(m.uid) ? _sel.remove(m.uid) : _sel.add(m.uid));
                 },
-                onTap: selecting ? () => setState(() => _sel.contains(m.uid) ? _sel.remove(m.uid) : _sel.add(m.uid)) : null,
+                onTap: selecting
+                    ? () => setState(() => _sel.contains(m.uid) ? _sel.remove(m.uid) : _sel.add(m.uid))
+                    : () async {
+                        final deleted = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => ReadPage(item: m)));
+                        if (!mounted) return;
+                        setState(() {
+                          if (deleted == true) {
+                            _items?.removeWhere((x) => x.uid == m.uid);
+                          } else {
+                            // Opened = read: show it as seen without reloading.
+                            final i = _items?.indexOf(m) ?? -1;
+                            if (i >= 0) _items![i] = MailItem(m.uid, m.from, m.subject, m.at, true);
+                          }
+                        });
+                      },
                 leading: selecting
                     ? Checkbox(value: _sel.contains(m.uid), onChanged: (v) => setState(() => v == true ? _sel.add(m.uid) : _sel.remove(m.uid)))
                     : CircleAvatar(backgroundColor: cs.surfaceContainerHighest, child: Text(m.from.isEmpty ? '?' : m.from[0].toUpperCase())),
@@ -337,16 +427,232 @@ class _MailPageState extends State<MailPage> {
   }
 }
 
-/// Write an email (optionally drafted by Buddy), review it, then send.
+/// Reads one email the way Gmail shows it: images (trackers blocked), tappable links, attachments.
+/// Reply opens Compose pre-filled; Delete asks first and moves it to Trash.
+class ReadPage extends StatefulWidget {
+  final MailItem item;
+  const ReadPage({super.key, required this.item});
+  @override
+  State<ReadPage> createState() => _ReadPageState();
+}
+
+class _ReadPageState extends State<ReadPage> {
+  MailMessage? _mail;
+  String? _error;
+  WebViewController? _web;
+  double _webHeight = 400;
+  final _downloading = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final m = await MailService.read(widget.item.uid);
+      final web = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted) // only to measure height; email scripts are stripped
+        ..setBackgroundColor(Colors.white)
+        ..setNavigationDelegate(NavigationDelegate(
+          onNavigationRequest: (r) {
+            final u = Uri.tryParse(r.url);
+            if (u == null || r.url.startsWith('about:') || r.url.startsWith('data:')) return NavigationDecision.navigate;
+            if (u.scheme == 'mailto') {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => ComposePage(to: u.path, subject: u.queryParameters['subject'])));
+            } else {
+              launchUrl(u, mode: LaunchMode.externalApplication);
+            }
+            return NavigationDecision.prevent;
+          },
+          onPageFinished: (_) => _measure(),
+        ));
+      await web.loadHtmlString(m.html);
+      if (mounted) {
+        setState(() {
+          _mail = m;
+          _web = web;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Couldn’t open this email. Check your connection.');
+    }
+  }
+
+  /// The web view sits inside the page scroll, so size it to its content (re-measured as images load).
+  Future<void> _measure() async {
+    for (final wait in [0, 400, 1200, 3000]) {
+      await Future.delayed(Duration(milliseconds: wait));
+      final h = await _web?.runJavaScriptReturningResult('document.documentElement.scrollHeight');
+      final v = double.tryParse('$h');
+      if (v != null && mounted && (v - _webHeight).abs() > 4) setState(() => _webHeight = v.clamp(80, 30000));
+    }
+  }
+
+  Future<void> _open(MailAttachment a) async {
+    setState(() => _downloading.add(a.name));
+    try {
+      final bytes = a.bytes();
+      if (bytes == null) throw Exception('empty');
+      final dir = Directory('/storage/emulated/0/Download/Buddy');
+      File f;
+      try {
+        await dir.create(recursive: true);
+        f = File('${dir.path}/${a.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}');
+        await f.writeAsBytes(bytes);
+      } catch (_) {
+        // No all-files access: keep it in the app's own folder instead.
+        f = File('${(await getApplicationDocumentsDirectory()).path}/${a.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}');
+        await f.writeAsBytes(bytes);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(f.path.startsWith('/storage') ? 'Saved to Download/Buddy' : 'Saved')));
+      }
+      await OpenFilex.open(f.path, type: a.mime);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn’t save this attachment.')));
+    } finally {
+      if (mounted) setState(() => _downloading.remove(a.name));
+    }
+  }
+
+  Future<void> _delete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        icon: const Icon(Icons.delete_outline),
+        title: const Text('Move this email to Trash?'),
+        content: Text('${widget.item.from}: ${widget.item.subject}\n\nYou can restore it from Trash for 30 days.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Move to Trash')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await MailService.trash([widget.item.uid]);
+      HapticFeedback.mediumImpact();
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn’t delete. Nothing was changed.')));
+    }
+  }
+
+  void _reply() {
+    final m = _mail!;
+    final subject = m.subject.toLowerCase().startsWith('re:') ? m.subject : 'Re: ${m.subject}';
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ComposePage(to: m.fromEmail, subject: subject)));
+  }
+
+  static IconData _icon(String mime) => mime.startsWith('image/')
+      ? Icons.image_outlined
+      : mime.contains('pdf')
+          ? Icons.picture_as_pdf_outlined
+          : mime.contains('sheet') || mime.contains('excel') || mime.contains('csv')
+              ? Icons.table_chart_outlined
+              : mime.startsWith('video/')
+                  ? Icons.movie_outlined
+                  : mime.contains('zip')
+                      ? Icons.folder_zip_outlined
+                      : Icons.insert_drive_file_outlined;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final m = _mail;
+    return Scaffold(
+      appBar: AppBar(
+        title: const SizedBox.shrink(),
+        actions: [
+          IconButton(onPressed: m == null ? null : _delete, icon: const Icon(Icons.delete_outline), tooltip: 'Move to Trash'),
+          IconButton(
+            onPressed: m == null
+                ? null
+                : () => Clipboard.setData(ClipboardData(text: m.text)).then((_) {
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+                    }),
+            icon: const Icon(Icons.copy_outlined),
+            tooltip: 'Copy text',
+          ),
+        ],
+      ),
+      floatingActionButton: m == null || m.fromEmail.isEmpty ? null : FloatingActionButton.extended(onPressed: _reply, icon: const Icon(Icons.reply), label: const Text('Reply')),
+      body: _error != null
+          ? ListView(padding: pagePadding, children: [
+              EmptyState(emoji: '📡', title: 'Offline?', subtitle: _error!),
+              Center(child: FilledButton.tonal(onPressed: _load, child: const Text('Try again'))),
+            ])
+          : m == null
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(padding: const EdgeInsets.only(bottom: 96), children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      SelectableText(m.subject, style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800, height: 1.25)),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        CircleAvatar(backgroundColor: cs.primaryContainer, child: Text(m.from.isEmpty ? '?' : m.from[0].toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800))),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(m.from, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(m.fromEmail, style: tt.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ]),
+                        ),
+                        if (m.at != null) Text(_MailPageState._short(m.at!), style: tt.labelSmall),
+                      ]),
+                      if (m.trackersBlocked > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Row(children: [
+                            Icon(Icons.shield_outlined, size: 16, color: cs.primary),
+                            const SizedBox(width: 6),
+                            Text('Blocked ${m.trackersBlocked} tracker${m.trackersBlocked == 1 ? '' : 's'}: the sender can’t see you opened this', style: tt.labelSmall),
+                          ]),
+                        ),
+                      if (m.attachments.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          for (final a in m.attachments)
+                            ActionChip(
+                              avatar: _downloading.contains(a.name) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_icon(a.mime), size: 18),
+                              label: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 220),
+                                child: Text('${a.name} · ${fmtBytes(a.size)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              onPressed: _downloading.contains(a.name) ? null : () => _open(a),
+                            ),
+                        ]),
+                      ],
+                      const SizedBox(height: 12),
+                    ]),
+                  ),
+                  SizedBox(height: _webHeight, child: WebViewWidget(controller: _web!)),
+                ]),
+    );
+  }
+}
+
+/// Write an email (optionally drafted by Buddy), add attachments, review, then send (with optional read tracking).
 class ComposePage extends StatefulWidget {
-  const ComposePage({super.key});
+  final String? to, subject;
+  const ComposePage({super.key, this.to, this.subject});
   @override
   State<ComposePage> createState() => _ComposePageState();
 }
 
 class _ComposePageState extends State<ComposePage> {
-  final _to = TextEditingController(), _subject = TextEditingController(), _body = TextEditingController();
+  late final _to = TextEditingController(text: widget.to), _subject = TextEditingController(text: widget.subject), _body = TextEditingController();
   bool _drafting = false, _sending = false;
+  late bool _track = MailTracker.ready && MailTracker.onByDefault;
+  final _files = <(String, Uint8List)>[];
+  static const _maxBytes = 24 * 1024 * 1024; // Gmail's limit is 25 MB incl. encoding
+
+  int get _total => _files.fold(0, (a, f) => a + f.$2.length);
 
   @override
   void dispose() {
@@ -354,6 +660,18 @@ class _ComposePageState extends State<ComposePage> {
     _subject.dispose();
     _body.dispose();
     super.dispose();
+  }
+
+  Future<void> _attach() async {
+    final picked = await FilePicker.pickFiles();
+    for (final f in picked) {
+      final bytes = await f.readAsBytes();
+      if (_total + bytes.length > _maxBytes) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${f.name} is too big: emails can carry up to 25 MB in total.')));
+        continue;
+      }
+      setState(() => _files.add((f.name, bytes)));
+    }
   }
 
   Future<void> _draft() async {
@@ -372,7 +690,7 @@ class _ComposePageState extends State<ComposePage> {
     final name = Store.profile['name'] as String? ?? '';
     final r = await askBuddy(
       'You write clear, warm, professional emails. Output exactly: first line "Subject: …", a blank line, then the body signed "$name". No markdown.',
-      'Recipient: ${_to.text.isEmpty ? 'unknown' : _to.text}\nRequest: $what',
+      'Recipient: ${_to.text.isEmpty ? 'unknown' : _to.text}\nRequest: $what${_files.isEmpty ? '' : '\nAttached: ${_files.map((f) => f.$1).join(', ')}'}',
       maxTokens: 700,
     );
     if (!mounted) return;
@@ -400,6 +718,8 @@ class _ComposePageState extends State<ComposePage> {
           Text('Send this email?', style: Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           Text('From: ${MailAccount.address}\nTo: ${_to.text}\nSubject: ${_subject.text}', style: Theme.of(c).textTheme.bodySmall),
+          if (_files.isNotEmpty) Text('📎 ${_files.map((f) => f.$1).join(', ')} (${fmtBytes(_total)})', style: Theme.of(c).textTheme.bodySmall),
+          if (_track) Text('👀 Read tracking on: you’ll be notified when it’s opened', style: Theme.of(c).textTheme.bodySmall),
           const Divider(height: 20),
           ConstrainedBox(constraints: const BoxConstraints(maxHeight: 280), child: SingleChildScrollView(child: Text(_body.text))),
           const SizedBox(height: 16),
@@ -411,11 +731,13 @@ class _ComposePageState extends State<ComposePage> {
     if (ok != true) return;
     setState(() => _sending = true);
     try {
-      await MailService.send(to: _to.text, subject: _subject.text, body: _body.text);
+      final id = _track ? MailTracker.newId() : null;
+      await MailService.send(to: _to.text, subject: _subject.text, body: _body.text, attachments: _files, pixelUrl: id == null ? null : MailTracker.pixelUrl(id));
+      if (id != null) await MailTracker.recordSent(id, _to.text.trim(), _subject.text.trim().isEmpty ? '(no subject)' : _subject.text.trim());
       HapticFeedback.mediumImpact();
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent ✓')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_track ? 'Sent ✓ · Buddy will tell you when it’s opened' : 'Sent ✓')));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn’t send. Check your connection.')));
@@ -426,10 +748,12 @@ class _ComposePageState extends State<ComposePage> {
 
   @override
   Widget build(BuildContext context) {
-    final valid = _to.text.contains('@') && _body.text.trim().isNotEmpty;
+    final valid = _to.text.contains('@') && (_body.text.trim().isNotEmpty || _files.isNotEmpty);
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('New email'), actions: [
-        TextButton.icon(onPressed: _drafting ? null : _draft, icon: const Text('✨'), label: const Text('Draft with Buddy')),
+        IconButton(onPressed: _attach, icon: const Icon(Icons.attach_file), tooltip: 'Attach files'),
+        TextButton.icon(onPressed: _drafting ? null : _draft, icon: const Text('✨'), label: const Text('Draft')),
       ]),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -446,7 +770,26 @@ class _ComposePageState extends State<ComposePage> {
         if (_drafting) const LinearProgressIndicator(),
         TextField(controller: _to, keyboardType: TextInputType.emailAddress, autocorrect: false, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'To', hintText: 'name@example.com')),
         TextField(controller: _subject, decoration: const InputDecoration(labelText: 'Subject')),
-        const SizedBox(height: 8),
+        if (_files.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final f in _files)
+              InputChip(
+                avatar: const Icon(Icons.attach_file, size: 16),
+                label: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 200), child: Text('${f.$1} · ${fmtBytes(f.$2.length)}', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                onDeleted: () => setState(() => _files.remove(f)),
+              ),
+          ]),
+        ],
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          secondary: const Icon(Icons.done_all),
+          title: const Text('Tell me when it’s opened'),
+          subtitle: Text(MailTracker.ready ? 'Adds an invisible image, like Mailsuite' : 'Needs read tracking set up (Mail → Sent)', style: tt.bodySmall),
+          value: _track,
+          onChanged: MailTracker.ready ? (v) => setState(() => _track = v) : null,
+        ),
         TextField(controller: _body, onChanged: (_) => setState(() {}), maxLines: null, minLines: 10, decoration: const InputDecoration(hintText: 'Write your email…', border: InputBorder.none)),
       ]),
     );

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:enough_mail/enough_mail.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -109,6 +110,100 @@ class MailService {
           ..sort((a, b) => (b.at ?? DateTime(0)).compareTo(a.at ?? DateTime(0)));
       });
 
+  /// Full email for the reader (marks it read, like opening it in Gmail). Attachments stay in memory until downloaded.
+  static Future<MailMessage> read(int uid) => _with((c) async {
+        final r = await c.uidFetchMessages(MessageSequence.fromIds([uid], isUid: true), 'BODY[]');
+        final m = r.messages.first;
+        final f = m.from?.firstOrNull;
+        // Inline images referenced as cid:… become data: URIs so they show without a server.
+        final cids = <String, String>{};
+        for (final part in m.allPartsFlat) {
+          final id = part.getHeaderValue('content-id')?.replaceAll(RegExp(r'[<>\s]'), '');
+          final type = part.mediaType.text;
+          if (id == null || id.isEmpty || !type.startsWith('image/')) continue;
+          final bytes = part.decodeContentBinary();
+          if (bytes != null) cids[id.toLowerCase()] = 'data:$type;base64,${base64Encode(bytes)}';
+        }
+        final atts = <MailAttachment>[
+          for (final info in m.findContentInfo())
+            MailAttachment(info.fileName ?? 'attachment', info.size ?? m.getPart(info.fetchId)?.decodeContentBinary()?.length ?? 0, info.mediaType?.text ?? 'application/octet-stream', () => m.getPart(info.fetchId)?.decodeContentBinary()),
+        ];
+        final prepared = prepareEmailHtml(m.decodeTextHtmlPart(), m.decodeTextPlainPart(), cids);
+        return MailMessage(
+          from: f?.personalName?.isNotEmpty == true ? f!.personalName! : (f?.email ?? '(unknown)'),
+          fromEmail: f?.email ?? '',
+          subject: m.decodeSubject() ?? '(no subject)',
+          at: m.decodeDate(),
+          html: prepared.$1,
+          trackersBlocked: prepared.$2,
+          text: htmlToText(m.decodeTextHtmlPart() ?? '').isNotEmpty ? htmlToText(m.decodeTextHtmlPart()!) : (m.decodeTextPlainPart() ?? '').trim(),
+          attachments: atts,
+        );
+      });
+
+  static final _trackerSrc = RegExp(
+    r'(track|pixel|beacon|/open(\?|/|\.gif)|/o/[a-z0-9]{16,}|wf/open|mailtrack|mailsuite|list-manage\.com|hs-analytics|hubspot.*/e\d|mandrillapp\.com|sendgrid\.net|mailchimp|customeriomail|email\.mg\.|spacer\.gif|blank\.gif|1x1|lambda-url)',
+    caseSensitive: false,
+  );
+
+  /// Builds a self-contained HTML page: inline images embedded, 1×1 tracking pixels removed, plain text linkified.
+  /// Returns (html, number of trackers blocked).
+  static (String, int) prepareEmailHtml(String? html, String? plain, Map<String, String> cids) {
+    var blocked = 0;
+    String body;
+    if (html != null && html.trim().isNotEmpty) {
+      body = html.replaceAllMapped(RegExp(r'<img\b[^>]*>', caseSensitive: false), (m) {
+        final tag = m[0]!;
+        final src = RegExp(r"""src\s*=\s*["']([^"']*)["']""", caseSensitive: false).firstMatch(tag)?[1] ?? '';
+        int? dim(String a) => int.tryParse(RegExp('$a\\s*[=:]\\s*["\']?(\\d+)', caseSensitive: false).firstMatch(tag)?[1] ?? '');
+        final w = dim('width'), h = dim('height');
+        final tiny = (w != null && w <= 3) || (h != null && h <= 3);
+        if (src.startsWith('http') && (tiny || _trackerSrc.hasMatch(src))) {
+          blocked++;
+          return '';
+        }
+        if (src.toLowerCase().startsWith('cid:')) {
+          final data = cids[src.substring(4).toLowerCase()];
+          return data == null ? '' : tag.replaceFirst(src, data);
+        }
+        return tag;
+      });
+      // Strip scripts and remote forms; JavaScript is off anyway.
+      body = body
+          .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true, caseSensitive: false), '')
+          .replaceAll(RegExp(r'''\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)''', caseSensitive: false), '')
+          .replaceAll(RegExp(r'''href\s*=\s*["']\s*javascript:[^"']*["']''', caseSensitive: false), 'href="#"');
+    } else {
+      final esc = const HtmlEscape(HtmlEscapeMode.element).convert((plain ?? '').trim());
+      body = '<div style="white-space:pre-wrap">${esc.replaceAllMapped(RegExp(r'(https?://[^\s<"]+)|([\w.+-]+@[\w-]+\.[\w.]+)'), (m) => m[1] != null ? '<a href="${m[1]}">${m[1]}</a>' : '<a href="mailto:${m[2]}">${m[2]}</a>')}</div>';
+    }
+    return (
+      '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+          '<style>html,body{margin:0;padding:0;background:#fff;color:#202124}body{padding:12px;font:15px/1.5 Roboto,Arial,sans-serif;word-wrap:break-word;overflow-wrap:anywhere}'
+          'img{max-width:100%!important;height:auto!important}table{max-width:100%!important}a{color:#1a73e8}pre{white-space:pre-wrap}</style></head><body>$body</body></html>',
+      blocked
+    );
+  }
+
+  /// HTML → readable text: keeps paragraphs, list bullets and link targets; drops styles/scripts.
+  static String htmlToText(String h) {
+    var s = h
+        .replaceAll(RegExp(r'<(style|script|head)[^>]*>.*?</\1>', dotAll: true, caseSensitive: false), ' ')
+        .replaceAllMapped(RegExp(r'''<a\s[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>''', dotAll: true, caseSensitive: false), (m) {
+          final text = m[2]!.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+          final url = m[1]!;
+          return text.isEmpty || !url.startsWith('http') || text == url ? (url.startsWith('http') ? ' $url ' : text) : '$text ($url)';
+        })
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '\n• ')
+        .replaceAll(RegExp(r'</(p|div|tr|h[1-6]|table|ul|ol)>', caseSensitive: false), '\n\n')
+        .replaceAll(RegExp(r'<[^>]+>'), '');
+    const ent = {'&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#8377;': '₹', '&rsquo;': '’', '&lsquo;': '‘', '&ldquo;': '“', '&rdquo;': '”', '&hellip;': '…', '&zwnj;': '', '&#8203;': ''};
+    ent.forEach((k, v) => s = s.replaceAll(k, v));
+    s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)));
+    return s.split('\n').map((l) => l.replaceAll(RegExp(r'[ \t ]+'), ' ').trim()).join('\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+  }
+
   /// Moves emails to Trash (recoverable ~30 days). Only ever called after the user confirms.
   static Future<void> trash(List<int> uids) => _with((c) async {
         final seq = MessageSequence.fromIds(uids, isUid: true);
@@ -122,17 +217,21 @@ class MailService {
         }
       });
 
-  /// Sends a plain-text email. Only ever called after the user confirms the preview.
-  static Future<void> send({required String to, required String subject, required String body}) async {
+  /// Sends an email with optional attachments and read-tracking pixel. Only ever called after the user confirms the preview.
+  static Future<void> send({required String to, required String subject, required String body, List<(String, Uint8List)> attachments = const [], String? pixelUrl}) async {
     final s = SmtpClient('buddy.app', isLogEnabled: false);
     await s.connectToServer(MailAccount.hosts.$2, 465, isSecure: true);
     try {
       await s.ehlo();
       await s.authenticate(MailAccount.address!, (await MailAccount.password())!, AuthMechanism.plain);
-      final b = MessageBuilder.prepareMultipartAlternativeMessage(plainText: body, htmlText: '<p>${const HtmlEscape().convert(body).replaceAll('\n', '<br>')}</p>')
+      final html = '<div>${const HtmlEscape().convert(body).replaceAll('\n', '<br>')}</div>${pixelUrl == null ? '' : '<img src="$pixelUrl" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">'}';
+      final b = (attachments.isEmpty ? MessageBuilder.prepareMultipartAlternativeMessage(plainText: body, htmlText: html) : (MessageBuilder.prepareMultipartMixedMessage()..addMultipartAlternative(plainText: body, htmlText: html)))
         ..from = [MailAddress(Store.profile['name'] as String?, MailAccount.address!)]
         ..to = [for (final a in to.split(RegExp(r'[,; ]+')).where((a) => a.contains('@'))) MailAddress(null, a)]
         ..subject = subject;
+      for (final (name, bytes) in attachments) {
+        b.addBinary(bytes, MediaType.guessFromFileName(name), filename: name);
+      }
       await s.sendMessage(b.buildMimeMessage());
     } finally {
       try {
@@ -170,4 +269,19 @@ class MailService {
 
   static String _imapDate(DateTime d) =>
       '${d.day}-${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.month - 1]}-${d.year}';
+}
+
+class MailAttachment {
+  final String name, mime;
+  final int size;
+  final Uint8List? Function() bytes;
+  const MailAttachment(this.name, this.size, this.mime, this.bytes);
+}
+
+class MailMessage {
+  final String from, fromEmail, subject, html, text;
+  final DateTime? at;
+  final int trackersBlocked;
+  final List<MailAttachment> attachments;
+  const MailMessage({required this.from, required this.fromEmail, required this.subject, required this.at, required this.html, required this.text, required this.trackersBlocked, required this.attachments});
 }

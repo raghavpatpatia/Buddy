@@ -186,7 +186,12 @@ void main() {
         return e;
       }, () => fakeMarket);
       expect(errs, isEmpty, reason: errs.join('\n'));
-      if (name == 'Invest') expect(find.text('My portfolio'), findsOneWidget);
+      if (name == 'Invest') {
+        await t.fling(find.byType(Scrollable).first, const Offset(0, 4000), 3000, warnIfMissed: false);
+        await t.pumpAndSettle();
+        expect(find.text('My portfolio'), findsOneWidget);
+        expect(find.textContaining('Market data unavailable'), findsNothing);
+      }
     });
   }
 }

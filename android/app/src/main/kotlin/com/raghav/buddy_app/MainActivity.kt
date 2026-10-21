@@ -207,8 +207,9 @@ class MainActivity : FlutterActivity() {
 
     private fun accessibilityOn(): Boolean {
         val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        val me = ComponentName(this, ScrollWatcherService::class.java).flattenToString()
-        return enabled.split(':').any { it.equals(me, ignoreCase = true) }
+        // Android may store the short form ("pkg/.ScrollWatcherService"); compare parsed components, not strings.
+        val me = ComponentName(this, ScrollWatcherService::class.java)
+        return enabled.split(':').any { ComponentName.unflattenFromString(it.trim()) == me }
     }
 
     private fun allFilesAccess(): Boolean =
