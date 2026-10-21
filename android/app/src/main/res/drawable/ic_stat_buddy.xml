@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: robot head with antenna, side sensors, visor (eyes inside) and mouth grille. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- antenna + light -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,0.8a1.5,1.5 0,1 1,0 3a1.5,1.5 0,1 1,0 -3zM11.35,3.4h1.3v2.4h-1.3z"/>
+    <!-- side sensors -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M0.8,10.5a1,1 0,0 1,1 -1h0.9v6h-0.9a1,1 0,0 1,-1 -1zM23.2,10.5a1,1 0,0 0,-1 -1h-0.9v6h0.9a1,1 0,0 0,1 -1z"/>
+    <!-- head with visor and mouth slots cut out (evenOdd) -->
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M7.2,5.6h9.6a4.5,4.5 0,0 1,4.5 4.5v6.6a4.5,4.5 0,0 1,-4.5 4.5h-9.6a4.5,4.5 0,0 1,-4.5 -4.5v-6.6a4.5,4.5 0,0 1,4.5 -4.5z
+            M7.6,9.2h8.8a2.2,2.2 0,0 1,2.2 2.2v0.9a2.2,2.2 0,0 1,-2.2 2.2h-8.8a2.2,2.2 0,0 1,-2.2 -2.2v-0.9a2.2,2.2 0,0 1,2.2 -2.2z
+            M8.4,17.2h1.2v1.2h-1.2zM10.2,17.2h1.2v1.2h-1.2zM12.6,17.2h1.2v1.2h-1.2zM14.4,17.2h1.2v1.2h-1.2z"/>
+    <!-- LED eyes inside the visor -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M8.3,10.6h2.2a0.9,0.9 0,0 1,0.9 0.9v0.6a0.9,0.9 0,0 1,-0.9 0.9h-2.2a0.9,0.9 0,0 1,-0.9 -0.9v-0.6a0.9,0.9 0,0 1,0.9 -0.9zM13.5,10.6h2.2a0.9,0.9 0,0 1,0.9 0.9v0.6a0.9,0.9 0,0 1,-0.9 0.9h-2.2a0.9,0.9 0,0 1,-0.9 -0.9v-0.6a0.9,0.9 0,0 1,0.9 -0.9z"/>
+</vector>

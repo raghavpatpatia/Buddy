@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scroll_watcher_desc">Buddy counts how many Reels, Shorts and short videos you swipe through so it can show your daily scroll stats and nudge you (vibration only) when you binge. It only looks at scroll events in Instagram, YouTube, TikTok, Facebook, Snapchat, Moj, Josh and ShareChat. Nothing is read, stored or sent anywhere except a counter on this phone.</string>
+</resources>
