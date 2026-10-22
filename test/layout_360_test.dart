@@ -45,6 +45,11 @@ Future<void> _loadRoboto() async {
     loader.addFont(Future.value(ByteData.sublistView(File('test/fixtures/fonts/Roboto-$w.ttf').readAsBytesSync())));
   }
   await loader.load();
+  final hud = FontLoader('Rajdhani');
+  for (final w in ['SemiBold', 'Bold']) {
+    hud.addFont(Future.value(ByteData.sublistView(File('assets/fonts/Rajdhani-$w.ttf').readAsBytesSync())));
+  }
+  await hud.load();
 }
 
 void _mockNative() {

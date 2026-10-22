@@ -4,13 +4,14 @@ import 'store.dart';
 
 // ---------------- Ranks ----------------
 const _ranks = [
-  'Spark', 'Rookie', 'Apprentice', 'Bug Hunter', 'Code Ninja',
-  'Pixel Pilot', 'Shader Wizard', 'Systems Sage', 'Game Architect', 'Legend',
+  'E-Rank Hunter', 'E-Rank Hunter', 'D-Rank Hunter', 'D-Rank Hunter', 'C-Rank Hunter',
+  'C-Rank Hunter', 'B-Rank Hunter', 'B-Rank Hunter', 'A-Rank Hunter', 'S-Rank Hunter',
 ];
 
-String rankFor(int level) => level <= _ranks.length ? _ranks[level - 1] : 'Legend ${level - _ranks.length + 1}';
+/// Hunter rank for a level: E to S over the first ten levels, then National Level and Monarch.
+String rankFor(int level) => level <= _ranks.length ? _ranks[level - 1] : (level < 20 ? 'National Level Hunter' : 'Monarch');
 
-// ---------------- Buddy LED colours (unlock by level) ----------------
+// ---------------- Buddy eye colours (unlock by level) ----------------
 class BotColor {
   final String id, name;
   final Color? color; // null = mood-based (auto); rainbow handled by the painter
@@ -20,7 +21,7 @@ class BotColor {
 }
 
 const botColors = [
-  BotColor('auto', 'Mood (auto)', null, 1),
+  BotColor('auto', 'Mana (auto)', null, 1),
   BotColor('emerald', 'Emerald', Color(0xFF2EE59D), 2),
   BotColor('crimson', 'Crimson', Color(0xFFFF4D6D), 4),
   BotColor('violet', 'Violet', Color(0xFFB388FF), 6),

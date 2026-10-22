@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' show Color;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -103,7 +104,7 @@ class ReadTracker {
       title: first ? '👀 ${t.to} opened your email' : '👀 ${t.to} opened it again',
       body: '“${t.subject}” · $h:${at.minute.toString().padLeft(2, '0')} ${at.hour < 12 ? 'AM' : 'PM'}',
       notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails('buddy_mail_open', 'Email opened', channelDescription: 'When someone opens an email you sent with Buddy', importance: Importance.defaultImportance),
+        android: AndroidNotificationDetails('buddy_mail_open', 'Email opened', channelDescription: 'When someone opens an email you sent with Buddy', importance: Importance.defaultImportance, color: Color(0xFF3FB8FF)),
       ),
     );
   }

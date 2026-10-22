@@ -14,6 +14,7 @@ import '../../phone/data/cleaner.dart';
 import '../../../app/sections.dart';
 import '../../settings/view/settings_page.dart';
 import '../../talk/view/talk_page.dart';
+import '../../../shared/system_background.dart';
 import '../../../shared/ui.dart';
 import '../controller/home_controller.dart';
 import '../model/quest.dart';
@@ -160,7 +161,7 @@ class _BuddyPageState extends State<BuddyPage> with WidgetsBindingObserver {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                      Text('${rankFor(lvl)} · ${100 - xp % 100} XP to Lv ${lvl + 1}', maxLines: 1, overflow: TextOverflow.ellipsis, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                      Text('${rankFor(lvl)} · ${100 - xp % 100} XP to Lv ${lvl + 1}', maxLines: 2, style: const TextStyle(fontFamily: hudFont, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: SystemColors.manaBright, height: 1.15)),
                     ]),
                   ),
                   Badge(
@@ -380,7 +381,7 @@ class _SpeechBubble extends StatelessWidget {
   const _SpeechBubble({required this.text, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme.secondaryContainer;
+    const c = SystemColors.panel;
     return Column(
       children: [
         GestureDetector(
@@ -392,16 +393,28 @@ class _SpeechBubble extends StatelessWidget {
               key: ValueKey(text),
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-              decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(20)),
-              child: Column(children: [
-                Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, height: 1.3)),
-                const SizedBox(height: 4),
-                Text('Tap for another', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSecondaryContainer.withValues(alpha: 0.6))),
-              ]),
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: SystemColors.mana.withValues(alpha: 0.6)),
+                boxShadow: [BoxShadow(color: SystemColors.mana.withValues(alpha: 0.2), blurRadius: 14)],
+              ),
+              child: SystemFrame(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(children: [
+                    const Text('[ SYSTEM ]', style: TextStyle(fontFamily: hudFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 3, color: SystemColors.mana)),
+                    const SizedBox(height: 4),
+                    Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, height: 1.3)),
+                    const SizedBox(height: 4),
+                    Text('Tap for another', style: TextStyle(fontSize: 10, color: SystemColors.muted.withValues(alpha: 0.8))),
+                  ]),
+                ),
+              ),
             ),
           ),
         ),
-        CustomPaint(size: const Size(24, 12), painter: _TailPainter(c)),
+        CustomPaint(size: const Size(24, 12), painter: _TailPainter(SystemColors.mana.withValues(alpha: 0.6))),
       ],
     );
   }
@@ -443,14 +456,14 @@ class _LevelRing extends StatelessWidget {
               value: v,
               strokeWidth: 5,
               strokeCap: StrokeCap.round,
-              color: Colors.amber.shade600,
+              color: SystemColors.mana,
               backgroundColor: cs.surfaceContainerHighest,
             ),
           ),
         ),
         Column(mainAxisSize: MainAxisSize.min, children: [
           Text('LV', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: cs.onSurfaceVariant, height: 1)),
-          Text('$level', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, height: 1.1)),
+          Text('$level', style: const TextStyle(fontFamily: hudFont, fontSize: 22, fontWeight: FontWeight.w700, height: 1.0, color: SystemColors.manaBright)),
         ]),
       ]),
     );

@@ -7,8 +7,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Buddy's robot voice: Android TTS → WAV file → ring modulator + metallic comb echo → playback.
-/// Falls back to plain (lower-pitched) TTS if any step fails.
+/// Buddy's shadow-knight voice: Android TTS → WAV file → [shadowize] (deeper, heavier, armoured) → playback.
+/// Falls back to plain low-pitched TTS if any step fails.
 class RobotVoice {
   final FlutterTts tts;
   final _player = AudioPlayer();
@@ -25,12 +25,12 @@ class RobotVoice {
     try {
       final dir = await getTemporaryDirectory();
       final raw = '${dir.path}/buddy_tts_raw.wav', out = '${dir.path}/buddy_tts_robot.wav';
-      await tts.setPitch(0.85);
-      await tts.setSpeechRate(0.47);
+      await tts.setPitch(0.72);
+      await tts.setSpeechRate(0.44);
       await tts.awaitSynthCompletion(true);
       await tts.synthesizeToFile(text, raw, true);
       final input = await File(raw).readAsBytes();
-      final processed = await Isolate.run(() => robotize(input));
+      final processed = await Isolate.run(() => shadowize(input));
       await File(out).writeAsBytes(processed, flush: true);
       onStart?.call();
       await _player.play(DeviceFileSource(out));
@@ -40,8 +40,8 @@ class RobotVoice {
   }
 
   Future<void> _plain(String text) async {
-    await tts.setPitch(robotic ? 0.7 : 1.05);
-    await tts.setSpeechRate(0.5);
+    await tts.setPitch(robotic ? 0.55 : 1.05);
+    await tts.setSpeechRate(robotic ? 0.44 : 0.5);
     onStart?.call();
     await tts.speak(text);
   }
@@ -54,8 +54,8 @@ class RobotVoice {
   void dispose() => _player.dispose();
 }
 
-/// Applies the robot effect to a 16-bit PCM WAV and returns a new WAV. Pure function (testable).
-Uint8List robotize(Uint8List wav, {double carrierHz = 45, double wet = 0.55, double echoMs = 6, double feedback = 0.45}) {
+/// Reads a 16-bit PCM WAV: (sample rate, channels, samples in -1..1).
+(int, int, Float64List) _readWav(Uint8List wav) {
   final bd = ByteData.sublistView(wav);
   int? sampleRate, channels, bits, dataOff, dataLen;
   var off = 12; // skip RIFF header
@@ -79,21 +79,17 @@ Uint8List robotize(Uint8List wav, {double carrierHz = 45, double wet = 0.55, dou
   for (var i = 0; i < n; i++) {
     x[i] = bd.getInt16(dataOff + i * 2, Endian.little) / 32768.0;
   }
-  final ch = channels ?? 1;
-  final y = Float64List(n);
-  final delay = max(1, (sampleRate * echoMs / 1000).round()) * ch;
+  return (sampleRate, channels ?? 1, x);
+}
+
+/// Writes mono/stereo 16-bit PCM, normalised to 90% of full scale.
+Uint8List _writeWav(int sampleRate, int ch, Float64List y) {
   var peak = 1e-9;
-  for (var i = 0; i < n; i++) {
-    final t = (i ~/ ch) / sampleRate;
-    // Ring modulation: multiply the voice by a low sine (the classic sci-fi robot timbre), mixed with the dry voice.
-    final ring = x[i] * sin(2 * pi * carrierHz * t);
-    var v = wet * ring + (1 - wet) * x[i];
-    // Short feedback comb filter gives the hollow, metallic resonance.
-    if (i >= delay) v += feedback * y[i - delay];
-    y[i] = v;
+  for (final v in y) {
     if (v.abs() > peak) peak = v.abs();
   }
   final gain = 0.9 / peak;
+  final n = y.length;
   final out = Uint8List(44 + n * 2);
   final ob = ByteData.sublistView(out);
   void str(int o, String s) => out.setRange(o, o + 4, s.codeUnits);
@@ -114,4 +110,62 @@ Uint8List robotize(Uint8List wav, {double carrierHz = 45, double wet = 0.55, dou
     ob.setInt16(44 + i * 2, (y[i] * gain * 32767).round().clamp(-32768, 32767), Endian.little);
   }
   return out;
+}
+
+/// Turns TTS speech into Buddy's shadow-knight voice and returns a new WAV (same format, a short echo tail added).
+/// Pure function (testable). [pitch] < 1 lowers the voice without slowing it down.
+Uint8List shadowize(Uint8List wav, {double pitch = 0.84}) {
+  final (sr, ch, x) = _readWav(wav);
+  final frames = x.length ~/ ch;
+  final tail = (sr * 0.18).round();
+  final y = Float64List((frames + tail) * ch);
+  for (var c = 0; c < ch; c++) {
+    double at(int f) => f >= 0 && f < frames ? x[f * ch + c] : 0;
+    // 1. Pitch down: two delay-line read heads sweep at (1 - pitch) and cross-fade (Doppler pitch shifter).
+    final window = sr * 0.05;
+    final shifted = Float64List(frames + tail);
+    for (var i = 0; i < shifted.length; i++) {
+      var v = 0.0;
+      for (final head in const [0.0, 0.5]) {
+        final phase = (i * (1 - pitch) / window + head) % 1.0;
+        final d = phase * window;
+        final pos = i - d;
+        final f0 = pos.floor();
+        final frac = pos - f0;
+        v += (at(f0) * (1 - frac) + at(f0 + 1) * frac) * sin(pi * phase);
+      }
+      shifted[i] = v;
+    }
+    // 2. Weight and darkness: boost below ~220 Hz, roll off above ~3.4 kHz.
+    final aLow = 1 - exp(-2 * pi * 220 / sr), aHigh = 1 - exp(-2 * pi * 3400 / sr);
+    var low = 0.0, h1 = 0.0, h2 = 0.0;
+    // 3. Helmet resonance (short metallic comb) and 4. a dark two-tap echo.
+    final comb = (sr * 0.0045).round(), e1 = (sr * 0.07).round(), e2 = (sr * 0.14).round();
+    final wet = Float64List(shifted.length);
+    for (var i = 0; i < shifted.length; i++) {
+      final s = shifted[i];
+      low += aLow * (s - low);
+      var v = s + 1.3 * low;
+      h1 += aHigh * (v - h1);
+      h2 += aHigh * (h1 - h2);
+      v = h2;
+      // Soft drive for grit, then a faint 26 Hz tremble that reads as a growl.
+      v = _tanh(1.9 * v) / _tanh(1.9);
+      v *= 1 - 0.12 * (0.5 + 0.5 * sin(2 * pi * 26 * i / sr));
+      if (i >= comb) v += 0.3 * wet[i - comb];
+      wet[i] = v;
+    }
+    for (var i = 0; i < wet.length; i++) {
+      var v = wet[i];
+      if (i >= e1) v += 0.22 * wet[i - e1];
+      if (i >= e2) v += 0.1 * wet[i - e2];
+      y[i * ch + c] = v;
+    }
+  }
+  return _writeWav(sr, ch, y);
+}
+
+double _tanh(double v) {
+  final e = exp(2 * v.clamp(-20, 20));
+  return (e - 1) / (e + 1);
 }

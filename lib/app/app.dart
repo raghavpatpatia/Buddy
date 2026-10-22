@@ -12,6 +12,7 @@ import '../features/home/view/buddy_page.dart';
 import '../features/money/data/read_tracker.dart';
 import '../features/settings/view/setup_page.dart';
 import '../shared/celebrate.dart';
+import '../shared/system_background.dart';
 import '../shared/ui.dart';
 import 'sections.dart';
 
@@ -34,8 +35,9 @@ class _BuddyAppState extends State<BuddyApp> {
       locale: const Locale('en', 'IN'),
       supportedLocales: const [Locale('en', 'IN'), Locale('en', 'US')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: buddyTheme(Brightness.light),
-      darkTheme: buddyTheme(Brightness.dark),
+      theme: buddyTheme(),
+      themeMode: ThemeMode.dark,
+      builder: (context, child) => SystemBackground(child: child!),
       home: _setup ? const HomeShell() : SetupPage(onDone: () => setState(() => _setup = true)),
     );
   }

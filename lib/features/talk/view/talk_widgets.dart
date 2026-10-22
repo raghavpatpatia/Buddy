@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/bot_face.dart';
+import '../../../shared/ui.dart';
 import '../controller/brain_settings_controller.dart';
 import '../data/talk_settings.dart';
 import '../data/wisdom.dart';
@@ -17,28 +18,27 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final ref = msg.refs.map((id) => teachings.where((t) => t.id == id).firstOrNull).whereType<Teaching>().firstOrNull;
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
-        gradient: msg.user ? const LinearGradient(colors: [Color(0xFF7C4DFF), Color(0xFF26C6DA)]) : null,
-        color: msg.user ? null : (dark ? const Color(0xFF1C2333) : Colors.white).withValues(alpha: 0.92),
+        gradient: msg.user ? LinearGradient(colors: [SystemColors.shadow.withValues(alpha: 0.85), SystemColors.mana.withValues(alpha: 0.85)]) : null,
+        color: msg.user ? null : SystemColors.panel.withValues(alpha: 0.9),
+        border: msg.user ? null : Border.all(color: SystemColors.mana.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(20),
           topRight: const Radius.circular(20),
           bottomLeft: Radius.circular(msg.user ? 20 : 6),
           bottomRight: Radius.circular(msg.user ? 6 : 20),
         ),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: (msg.user ? SystemColors.shadow : SystemColors.mana).withValues(alpha: 0.18), blurRadius: 12)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         if (msg.text.isEmpty && !msg.user)
           const TypingDots()
         else
-          ..._rich(context, msg.text, msg.user ? Colors.white : (dark ? const Color(0xFFE8ECF6) : const Color(0xFF1B1F3B))),
+          ..._rich(context, msg.text, msg.user ? Colors.white : SystemColors.text),
         if (!msg.user && msg.text.isNotEmpty && (ref != null || onSpeak != null))
           Row(mainAxisSize: MainAxisSize.min, children: [
             if (ref != null)
@@ -47,7 +47,7 @@ class ChatBubble extends StatelessWidget {
                 onTap: () => showModalBottomSheet(context: context, builder: (_) => VerseSheet(t: ref)),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: Text('📜 ${ref.src.split(',').first}', style: TextStyle(fontSize: 11, color: dark ? const Color(0xFF80DEEA) : cs.primary, fontWeight: FontWeight.w700)),
+                  child: Text('📜 ${ref.src.split(',').first}', style: TextStyle(fontSize: 11, color: SystemColors.manaBright, fontWeight: FontWeight.w700)),
                 ),
               ),
             if (onSpeak != null)
@@ -153,7 +153,7 @@ class GlowBuddyState extends State<GlowBuddy> with SingleTickerProviderStateMixi
                 height: 120 + 24 * p,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [const Color(0xFF26C6DA).withValues(alpha: 0.35 + 0.25 * p), Colors.transparent]),
+                  gradient: RadialGradient(colors: [SystemColors.shadow.withValues(alpha: 0.3 + 0.25 * p), SystemColors.mana.withValues(alpha: 0.08), Colors.transparent]),
                 ),
               ),
               child!,
@@ -191,12 +191,12 @@ class AuroraState extends State<Aurora> with SingleTickerProviderStateMixin {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: dark ? const [Color(0xFF0A0F1F), Color(0xFF140C2A)] : const [Color(0xFFEFF7FF), Color(0xFFF7F0FF)],
+                colors: const [Color(0xFF050916), Color(0xFF0B0620)],
               ),
             ),
             child: Stack(children: [
               for (final (ph, col, r) in dark
-                  ? [(0.0, const Color(0xFF00B8D4), 0.7), (2.1, const Color(0xFF7C4DFF), 0.8), (4.2, const Color(0xFFFF6E9C), 0.6)]
+                  ? [(0.0, SystemColors.mana, 0.7), (2.1, SystemColors.shadow, 0.8), (4.2, const Color(0xFF2B4BFF), 0.6)]
                   : [(0.0, const Color(0xFF80DEEA), 0.7), (2.1, const Color(0xFFB39DDB), 0.8), (4.2, const Color(0xFFFFCC80), 0.6)])
                 Align(
                   alignment: a(ph, r),
@@ -232,7 +232,7 @@ class MicButtonState extends State<MicButton> with SingleTickerProviderStateMixi
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = widget.listening ? const Color(0xFFFF5C8A) : cs.primary;
+    final color = widget.listening ? SystemColors.shadow : cs.primary;
     return SizedBox.square(
       dimension: 50,
       child: Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
@@ -267,7 +267,7 @@ class CodeBlock extends StatelessWidget {
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.fromLTRB(10, 4, 4, 10),
-        decoration: BoxDecoration(color: const Color(0xFF1E232B), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: const Color(0xFF060A14), borderRadius: BorderRadius.circular(8), border: Border.all(color: SystemColors.mana.withValues(alpha: 0.3))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Align(
             alignment: Alignment.centerRight,

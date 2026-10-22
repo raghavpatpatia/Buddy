@@ -15,7 +15,10 @@ void main() {
     expect(Store.xpEvents.value!.newLevel, isNull);
     await Store.addXp(50); // 110 XP → level 2
     expect(Store.xpEvents.value!.newLevel, 2);
-    expect(rankFor(2), 'Rookie');
+    expect(rankFor(2), 'E-Rank Hunter');
+    expect(rankFor(10), 'S-Rank Hunter');
+    expect(rankFor(12), 'National Level Hunter');
+    expect(rankFor(25), 'Monarch');
   });
 
   test('boss takes damage, dies once, resets weekly', () async {

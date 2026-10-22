@@ -42,7 +42,7 @@ class _TrophiesPageState extends State<TrophiesPage> {
             ]),
           ]),
         ),
-        const SectionTitle('Buddy’s LED colour'),
+        const SectionTitle('Buddy’s eye colour'),
         AppCard(
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             for (final c in botColors)

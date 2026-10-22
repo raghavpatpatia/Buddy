@@ -58,8 +58,8 @@ class _BrainSheetState extends State<BrainSheet> {
         const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Robot voice 🤖'),
-          subtitle: const Text('Metallic sci-fi effect on Buddy’s speech'),
+          title: const Text('Shadow voice ⚔️'),
+          subtitle: const Text('Deep, heavy armoured voice. Off = Buddy’s normal voice'),
           value: c.robotVoice,
           onChanged: c.setRobotVoice,
         ),

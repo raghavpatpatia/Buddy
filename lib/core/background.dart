@@ -82,6 +82,7 @@ Future<void> _maybeNotify(int bytes) async {
     body: 'Duplicates, old APKs and caches. Tap to review & clean.',
     notificationDetails: const NotificationDetails(
       android: AndroidNotificationDetails(
+        color: Color(0xFF3FB8FF),
         'buddy_clean',
         'Cleanup reports',
         channelDescription: 'Daily summary of space Buddy can free',

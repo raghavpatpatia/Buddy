@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../shared/ui.dart';
 import '../controller/talk_controller.dart';
 import 'brain_sheet.dart';
 import 'talk_widgets.dart';
@@ -146,7 +147,7 @@ class _TalkPageState extends State<TalkPage> {
                 decoration: BoxDecoration(
                   color: cs.surface.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(32),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4))],
+                  boxShadow: [BoxShadow(color: SystemColors.mana.withValues(alpha: 0.15), blurRadius: 16)],
                 ),
                 child: Row(children: [
                   MicButton(listening: c.listening, onTap: _toggleMic),

@@ -106,6 +106,7 @@ object BuddyCore {
         ensureChannels(ctx)
         val n = NotificationCompat.Builder(ctx, CH_NUDGE)
             .setSmallIcon(R.drawable.ic_stat_buddy)
+            .setColor(ctx.getColor(R.color.buddy_mana))
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -119,6 +120,7 @@ object BuddyCore {
 
     fun ongoingNotification(ctx: Context) = NotificationCompat.Builder(ctx, CH_ONGOING)
         .setSmallIcon(R.drawable.ic_stat_buddy)
+        .setColor(ctx.getColor(R.color.buddy_mana))
         .setContentTitle("Buddy is watching out for you")
         .setContentText(statusLine(ctx))
         .setOngoing(true)
@@ -214,6 +216,7 @@ object BuddyCore {
         lines.forEach { style.addLine(it) }
         val n = NotificationCompat.Builder(ctx, CH_NUDGE)
             .setSmallIcon(R.drawable.ic_stat_buddy)
+            .setColor(ctx.getColor(R.color.buddy_mana))
             .setContentTitle(title)
             .setContentText(lines.first())
             .setStyle(style.setBigContentTitle(title))
@@ -263,6 +266,7 @@ object BuddyCore {
             val pi = PendingIntent.getActivity(ctx, 7, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = NotificationCompat.Builder(ctx, CH_NUDGE)
                 .setSmallIcon(R.drawable.ic_stat_buddy)
+            .setColor(ctx.getColor(R.color.buddy_mana))
                 .setContentTitle("Growth check 🌱")
                 .setContentText("2 small things before the day ends: learn 1 thing + read 1 story.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
