@@ -57,7 +57,7 @@ class LocalBrain {
     try {
       // Opened independently so several brains can stay loaded at once.
       final inst = await FlutterEdgeAi.installModel(modelType: m.type, fileType: ModelFileType.litertlm).fromFile(path).install(activate: false);
-      model = await _withBackend((b) => FlutterEdgeAi.openModel(inst.spec, maxTokens: 1280, preferredBackend: b));
+      model = await _withBackend((b) => FlutterEdgeAi.openModel(inst.spec, maxTokens: m.context, preferredBackend: b));
     } catch (e) {
       debugPrint('[BuddyBrain] multi-model open failed ($e); using single active model');
       for (final other in _open.values) {
@@ -65,7 +65,7 @@ class LocalBrain {
       }
       _open.clear();
       await FlutterEdgeAi.installModel(modelType: m.type, fileType: ModelFileType.litertlm).fromFile(path).install();
-      model = await _withBackend((b) => FlutterEdgeAi.getActiveModel(maxTokens: 1280, preferredBackend: b));
+      model = await _withBackend((b) => FlutterEdgeAi.getActiveModel(maxTokens: m.context, preferredBackend: b));
     }
     _open[m.id] = model;
     debugPrint('[BuddyBrain] loaded ${m.id} in ${sw.elapsedMilliseconds}ms');
@@ -96,19 +96,20 @@ class LocalBrain {
     };
   }
 
-  /// Streams visible reply text for [prompt]; hides think blocks, stops on CJK drift or when [cancelled].
+  /// Streams visible reply text for [prompt] under [system]; hides think blocks, stops on CJK drift or when [cancelled].
   /// [onStop] reports why it stopped.
   Stream<String> generate(
     InferenceModel m,
     BrainModel brain,
     String prompt, {
+    String? system,
     required double temperature,
     required int topK,
     required int maxTokens,
     required bool Function() cancelled,
     required void Function(StopReason) onStop,
   }) async* {
-    final chat = await m.createChat(temperature: temperature, topK: topK, maxOutputTokens: maxTokens, modelType: brain.type, enableThinking: false);
+    final chat = await m.createChat(temperature: temperature, topK: topK, maxOutputTokens: maxTokens, modelType: brain.type, enableThinking: false, systemInstruction: system);
     await chat.addQueryChunk(Message.text(text: prompt, isUser: true));
     final sw = Stopwatch()..start();
     int? firstMs;

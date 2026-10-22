@@ -2,7 +2,7 @@
 
 A personal wellbeing companion for Android, built with Flutter. It has five tabs:
 
-- **Buddy:** quests, water, mood and talk.
+- **Buddy:** quests, water, mood and talk (an AI chat that remembers the session).
 - **Grow:** learn, practice, news (sortable by time), courses and stars.
 - **Health:** workouts, body and food.
 - **Money:** spend, invest, mail (with unread markers) and jobs.
@@ -163,6 +163,26 @@ flowchart TD
   L -- no / empty / refusal --> O[OfflineReplySource<br/>canned wisdom]
   CB & LB & O --> TC
 ```
+
+### Talk: session memory
+
+Every reply sees the whole session, not just the last message. The chat and its memory notes are saved on the phone, survive restarts, and are wiped by **Clear chat**.
+
+```mermaid
+flowchart LR
+  M[ChatMemory<br/>last 200 messages + notes, saved] --> W[buildContext<br/>notes + newest turns that fit]
+  W -- Smart brain ~10k chars<br/>Fast brain ~4k chars --> L[On-device: transcript + new message<br/>system prompt carries the notes]
+  W -- Cloud ~24k chars --> C[Cloud: real user/assistant turns]
+  L & C --> R[Reply]
+  R --> N{Older turns left<br/>the window?}
+  N -- yes --> U[Brain folds them into<br/>≤10 bullet notes]
+  U --> M
+  X[Clear chat] --> M
+```
+
+- Recent turns go to the brain word for word. Turns that no longer fit are summarised into short notes (names, plans, numbers, decisions), so nothing important is forgotten.
+- The persona is a general assistant (facts, planning, money, code, life) that adapts answer length. Indian-wisdom cards only appear for feelings and life questions.
+- Replies render light markdown: **bold**, `code`, headings, bullet lists and code blocks.
 
 ### Money: data flow and privacy
 

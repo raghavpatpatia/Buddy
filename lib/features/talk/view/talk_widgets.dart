@@ -69,9 +69,39 @@ class ChatBubble extends StatelessWidget {
         if (i.isOdd)
           CodeBlock(code: p.replaceFirst(RegExp(r'^[a-zA-Z#+]*\n'), '').trimRight())
         else if (p.trim().isNotEmpty)
-          SelectableText(p.trim(), style: TextStyle(color: color, fontSize: 15, height: 1.35)),
+          SelectableText.rich(TextSpan(children: markdownSpans(p.trim(), color)), style: TextStyle(color: color, fontSize: 15, height: 1.35)),
     ];
   }
+}
+
+final _inline = RegExp(r'\*\*(.+?)\*\*|`([^`]+)`');
+
+/// Light markdown for chat replies: headings, bullet and numbered lists, **bold** and `code`.
+List<InlineSpan> markdownSpans(String text, Color color) {
+  final spans = <InlineSpan>[];
+  final lines = text.split('\n');
+  for (final (i, raw) in lines.indexed) {
+    var line = raw.trimRight();
+    var bold = false;
+    final heading = RegExp(r'^#{1,6}\s+').firstMatch(line);
+    if (heading != null) {
+      line = line.substring(heading.end);
+      bold = true;
+    }
+    final bullet = RegExp(r'^(\s*)[-*•]\s+').firstMatch(line);
+    if (bullet != null) line = '${bullet.group(1)}•  ${line.substring(bullet.end)}';
+    var last = 0;
+    for (final m in _inline.allMatches(line)) {
+      if (m.start > last) spans.add(TextSpan(text: line.substring(last, m.start), style: bold ? const TextStyle(fontWeight: FontWeight.w800) : null));
+      spans.add(m.group(1) != null
+          ? TextSpan(text: m.group(1), style: const TextStyle(fontWeight: FontWeight.w800))
+          : TextSpan(text: m.group(2), style: TextStyle(fontFamily: 'monospace', backgroundColor: color.withValues(alpha: 0.12))));
+      last = m.end;
+    }
+    if (last < line.length) spans.add(TextSpan(text: line.substring(last), style: bold ? const TextStyle(fontWeight: FontWeight.w800) : null));
+    if (i < lines.length - 1) spans.add(const TextSpan(text: '\n'));
+  }
+  return spans;
 }
 
 /// Full verse, only when tapped.

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../model/chat_context.dart';
+
 import '../model/brain_model.dart';
 import 'cloud_brain.dart';
 import 'local_brain.dart';
@@ -11,12 +13,23 @@ import 'wisdom.dart';
 /// Everything a reply source needs to answer one message.
 class ReplyRequest {
   final String text;
+
+  /// The whole session before [text], oldest first; each source takes what fits its window.
   final List<(bool, String)> history;
+
+  /// Memory notes on turns older than any window.
+  final String notes;
   final List<Teaching> found;
   final bool coding;
   final bool Function() cancelled;
-  ReplyRequest(this.text, this.history, this.found, this.cancelled) : coding = isCodingQuestion(text);
+  ReplyRequest(this.text, this.history, this.found, this.cancelled, {this.notes = ''}) : coding = isCodingQuestion(text);
+
+  /// The notes plus the newest turns that fit in [budget] characters.
+  ChatContext window(int budget) => buildContext(history, notes, budget: budget);
 }
+
+/// Cloud context budget in characters (~6k tokens): plenty of memory, still cheap.
+const cloudHistoryChars = 24000;
 
 /// Thrown by a [ReplySource] that can't answer, so the chain moves on to the next source.
 class ReplyUnavailable implements Exception {
@@ -31,16 +44,18 @@ abstract interface class ReplySource {
   Stream<String> reply(ReplyRequest r);
 }
 
-/// Claude on AWS Bedrock, within its spend limits; gets the recent conversation for context.
+/// Claude on AWS Bedrock, within its spend limits; gets the session as real chat turns plus the notes.
 class CloudReplySource implements ReplySource {
   @override
   Stream<String> reply(ReplyRequest r) async* {
     if (!CloudBrain.enabled) throw const ReplyUnavailable('cloud brain off');
     final name = TalkSettings.userName;
+    final ctx = r.window(cloudHistoryChars);
     try {
       await for (final t in CloudBrain.instance.reply(
-        system: systemPrompt(name, code: r.coding),
-        user: userTurn(name, r.text, r.history, r.found, code: r.coding),
+        system: systemPrompt(name, code: r.coding, notes: ctx.notes),
+        user: userTurn(r.text, r.found, code: r.coding),
+        history: ctx.turns,
         maxTokens: r.coding ? 2048 : 1024,
       )) {
         if (r.cancelled()) return;
@@ -75,26 +90,47 @@ class LocalReplySource implements ReplySource {
       final model = await _brain.load(brain);
       final name = TalkSettings.userName;
       final lang = TalkSettings.hinglish ? 'Hinglish (Roman script)' : 'English';
+      final ctx = r.window(brain.historyChars);
+      final system = systemPrompt(name, code: r.coding, notes: ctx.notes);
+      final prompt = localPrompt(name, ctx.turns, userTurn(r.text, r.found, code: r.coding));
       final emitted = StringBuffer();
       // Small Qwen models sometimes drift into Chinese: retry once with a stricter prompt.
       for (var attempt = 0; attempt < 2; attempt++) {
         var stop = StopReason.none;
-        final strict = attempt == 0 ? '' : 'IMPORTANT: Write ONLY in $lang. Never use Chinese characters. ';
-        // Tiny on-device models copy earlier turns into their answer, so they get the question alone.
-        final prompt = '${strict}Instructions: ${systemPrompt(name, code: r.coding)} Always answer in $lang.\n\n'
-            'Question: ${userTurn(name, r.text, const [], r.found, code: r.coding)}\n\n(Answer in $lang only.)';
-        await for (final tok in _brain.generate(
+        final strict = attempt == 0 ? '' : ' IMPORTANT: Write ONLY in $lang. Never use Chinese characters.';
+        var lead = true;
+        await for (var tok in _brain.generate(
           model,
           brain,
           prompt,
-          temperature: r.coding ? 0.2 : (attempt == 0 ? 0.45 : 0.25),
+          system: '$system$strict',
+          temperature: r.coding ? 0.2 : (attempt == 0 ? 0.6 : 0.3),
           topK: attempt == 0 ? 40 : 20,
-          maxTokens: r.coding ? (brain == codeBrain ? 450 : 300) : 110,
+          maxTokens: r.coding ? brain.replyTokens + 200 : brain.replyTokens,
           cancelled: r.cancelled,
           onStop: (s) => stop = s,
         )) {
+          if (lead) {
+            // Hold back the first tokens until any copied "Buddy:" label can be removed.
+            emitted.write(tok);
+            if (emitted.length < 12) continue;
+            tok = stripSpeaker(emitted.toString());
+            emitted
+              ..clear()
+              ..write(tok);
+            lead = false;
+            yield tok;
+            continue;
+          }
           emitted.write(tok);
           yield tok;
+        }
+        if (lead && emitted.isNotEmpty) {
+          final rest = stripSpeaker(emitted.toString());
+          emitted
+            ..clear()
+            ..write(rest);
+          yield rest;
         }
         final text = emitted.toString().trim();
         if (stop == StopReason.cancelled) return;
@@ -137,9 +173,9 @@ class ReplyChain {
   void cancelAll() => _generation++;
 
   /// Streams the reply; [resetReply] in the stream means "discard what was shown so far".
-  Stream<String> reply({required String text, required List<(bool, String)> history, required List<Teaching> found}) async* {
+  Stream<String> reply({required String text, required List<(bool, String)> history, required List<Teaching> found, String notes = ''}) async* {
     final gen = _generation;
-    final req = ReplyRequest(text, history, found, () => gen != _generation);
+    final req = ReplyRequest(text, history, found, () => gen != _generation, notes: notes);
     for (final source in sources) {
       var any = false;
       try {
@@ -154,6 +190,40 @@ class ReplyChain {
         if (req.cancelled()) return;
         if (any) yield resetReply;
       }
+    }
+  }
+
+  /// Folds [turns] into the memory [notes] with the cloud brain, else the on-device one; null when neither can.
+  Future<String?> updateNotes(String notes, List<(bool, String)> turns) async {
+    if (turns.isEmpty) return notes;
+    final prompt = notesPrompt(TalkSettings.userName, notes, turns);
+    const system = 'You keep short, accurate memory notes for a chat assistant. Output only bullet lines.';
+    if (CloudBrain.enabled) {
+      try {
+        final b = StringBuffer();
+        await for (final t in CloudBrain.instance.reply(system: system, user: prompt, maxTokens: 400)) {
+          b.write(t);
+        }
+        if (b.isNotEmpty) return cleanNotes(b.toString());
+      } catch (_) {}
+    }
+    final brain = await LocalReplySource(LocalBrain.instance)._pick(false);
+    if (brain == null) return null;
+    final release = await LocalBrain.instance.lock();
+    try {
+      final model = await LocalBrain.instance.load(brain);
+      final b = StringBuffer();
+      var stop = StopReason.none;
+      await for (final t in LocalBrain.instance.generate(model, brain, prompt,
+          system: system, temperature: 0.2, topK: 20, maxTokens: 260, cancelled: () => false, onStop: (s) => stop = s)) {
+        b.write(t);
+      }
+      final out = cleanNotes(b.toString());
+      return stop == StopReason.none && out.isNotEmpty ? out : null;
+    } catch (_) {
+      return null;
+    } finally {
+      release();
     }
   }
 

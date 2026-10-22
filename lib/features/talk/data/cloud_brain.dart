@@ -94,14 +94,16 @@ class CloudBrain {
 
   /// Streams Claude's reply text. Throws [CloudUnavailable] (before yielding anything) when cloud is
   /// off, has no key, would cross a limit, or AWS fails; an error after text started is rethrown as-is.
-  Stream<String> reply({required String system, required String user, required int maxTokens}) async* {
+  /// [history] is the conversation before [user], oldest first, as (is user, text).
+  Stream<String> reply({required String system, required String user, required int maxTokens, List<(bool, String)> history = const []}) async* {
     if (!enabled) throw const CloudUnavailable('off');
     final key = await apiKey();
     if (key == null) throw CloudUnavailable(lastStatus = 'No Bedrock API key');
     final m = model;
 
     // Worst case: generous input estimate (≈2 chars/token) + every output token (incl. thinking) used.
-    final estIn = ((system.length + user.length) / 2).ceil() + 100;
+    final messages = chatMessages(history, user);
+    final estIn = ((system.length + messages.fold<int>(0, (n, m) => n + (m['content'] as String).length)) / 2).ceil() + 100;
     final reserved = _cost(m, estIn, maxTokens);
     if (spentToday + reserved > dailyLimit) throw CloudUnavailable(lastStatus = 'Daily limit reached, using on-device brain');
     if (spentMonth + reserved > monthlyLimit) throw CloudUnavailable(lastStatus = 'Monthly limit reached, using on-device brain');
@@ -119,9 +121,7 @@ class CloudBrain {
           'max_tokens': maxTokens,
           'stream': true,
           'system': system,
-          'messages': [
-            {'role': 'user', 'content': user},
-          ],
+          'messages': messages,
           // Short chat answers: low effort keeps thinking (billed as output) small and replies fast.
           'output_config': {'effort': 'low'},
         });
@@ -194,4 +194,19 @@ class CloudBrain {
       // No usage (cancelled / cut off): keep the full reservation; we never under-count.
     }
   }
+}
+
+/// Messages API turns: must start with the user and alternate, so same-speaker runs are merged.
+List<Map<String, Object>> chatMessages(List<(bool, String)> history, String user) {
+  final out = <Map<String, Object>>[];
+  for (final (isUser, text) in [...history, (true, user)]) {
+    final role = isUser ? 'user' : 'assistant';
+    if (out.isEmpty && !isUser) continue;
+    if (out.isNotEmpty && out.last['role'] == role) {
+      out.last['content'] = '${out.last['content']}\n\n$text';
+    } else {
+      out.add({'role': role, 'content': text});
+    }
+  }
+  return out;
 }

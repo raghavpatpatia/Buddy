@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../../core/arch/safe_notifier.dart';
 import '../../../core/store.dart';
+import '../data/chat_memory.dart';
+import '../data/cloud_brain.dart';
 import '../data/model_files.dart';
 import '../data/prompts.dart';
 import '../data/reply_chain.dart';
@@ -16,19 +20,21 @@ enum TalkPhase { idle, waking, listening, thinking, speaking }
 
 /// Talk screen logic: the conversation, sending, voice input, spoken replies and clearing.
 class TalkController extends SafeNotifier {
-  TalkController({ReplyChain? chain, SpeechToText? stt, FlutterTts? tts})
+  TalkController({ReplyChain? chain, ChatMemory? memory, SpeechToText? stt, FlutterTts? tts})
       : _chain = chain ?? ReplyChain.instance,
+        _memory = memory ?? ChatMemory.instance,
         _stt = stt ?? SpeechToText(),
         _tts = tts ?? FlutterTts();
 
   final ReplyChain _chain;
+  final ChatMemory _memory;
   final SpeechToText _stt;
   final FlutterTts _tts;
   late final _voice = RobotVoice(_tts)
     ..onStart = (() => _setPhase(TalkPhase.speaking))
     ..onDone = (() => _setPhase(TalkPhase.idle));
 
-  final messages = <ChatMessage>[];
+  List<ChatMessage> get messages => _memory.messages;
   TalkPhase phase = TalkPhase.idle;
   String? emotion;
   bool sttReady = false;
@@ -57,7 +63,7 @@ class TalkController extends SafeNotifier {
   }
 
   Future<void> init() async {
-    messages.addAll((Store.getJson('chat', []) as List).map((e) => ChatMessage.codec.decode(e)));
+    _memory.load();
     if (messages.isEmpty) messages.add(ChatMessage(false, 'Hi ${TalkSettings.userName} 👋 I’m all ears. Ask me anything: life, money or code.'));
     notifyListeners();
     await _initVoice();
@@ -92,9 +98,19 @@ class TalkController extends SafeNotifier {
     notifyListeners();
   }
 
-  void save() {
-    final keep = messages.length > 60 ? messages.sublist(messages.length - 60) : messages;
-    Store.setJson('chat', [for (final m in keep) ChatMessage.codec.encode(m)]);
+  void save() => _memory.save();
+
+  /// Folds turns that no longer fit the brain's window into the saved memory notes (in the background).
+  Future<void> _remember() async {
+    final budget = CloudBrain.enabled ? cloudHistoryChars : TalkSettings.mainBrain.historyChars;
+    final ctx = _memory.context(budget);
+    final pending = _memory.unnoted(ctx);
+    if (pending.isEmpty) return;
+    final session = _session;
+    // Only Buddy's own lines (e.g. the greeting) left the window: nothing worth a generation.
+    if (!pending.any((t) => t.$1)) return _memory.setNotes(_memory.notes, ctx.dropped);
+    final notes = await _chain.updateNotes(_memory.notes, pending);
+    if (notes != null && session == _session) await _memory.setNotes(notes, ctx.dropped);
   }
 
   /// Starts listening, or stops and returns the words heard so far; false when voice input isn't available.
@@ -136,8 +152,8 @@ class TalkController extends SafeNotifier {
     final u = understand(text);
     final coding = isCodingQuestion(text);
     final recent = messages.expand((m) => m.refs).toSet();
-    final found = coding ? <Teaching>[] : retrieve(text, recent: recent, fallback: false);
-    final history = [for (final m in messages.skip(1)) (m.user, m.text)];
+    final found = wantsWisdom(text, u) ? retrieve(text, recent: recent, fallback: false) : <Teaching>[];
+    final history = _memory.history;
     messages
       ..add(ChatMessage(true, text))
       ..add(ChatMessage(false, '', found.take(1).map((t) => t.id).toList()));
@@ -150,7 +166,7 @@ class TalkController extends SafeNotifier {
     }
     final session = _session;
     var first = true;
-    await for (final tok in _chain.reply(text: text, history: history, found: found)) {
+    await for (final tok in _chain.reply(text: text, history: history, found: found, notes: _memory.notes)) {
       if (disposed || session != _session) return;
       if (first) {
         emotion = null;
@@ -170,6 +186,7 @@ class TalkController extends SafeNotifier {
     _setPhase(TalkPhase.idle);
     save();
     if (speakReplies) speak(messages.last.text);
+    unawaited(_remember());
   }
 
   /// Stops every reply, voice and mic, and starts a fresh conversation.
@@ -178,9 +195,8 @@ class TalkController extends SafeNotifier {
     _chain.cancelAll();
     await _voice.stop();
     if (listening) await _stt.cancel();
-    messages
-      ..clear()
-      ..add(ChatMessage(false, 'Fresh start ✨ What’s on your mind, ${TalkSettings.userName}?'));
+    await _memory.clear();
+    messages.add(ChatMessage(false, 'Fresh start ✨ I’ve forgotten our last chat. What’s on your mind, ${TalkSettings.userName}?'));
     emotion = 'calm';
     _setPhase(TalkPhase.idle);
     save();
