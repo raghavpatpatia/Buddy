@@ -63,6 +63,7 @@ class MailController extends SafeNotifier {
 
   bool get selecting => selected.isNotEmpty;
   List<MailItem> get list => items.data ?? const [];
+  int get unread => list.where((m) => !m.seen).length;
 
   Future<void> show(MailMode m) async {
     mode = m;

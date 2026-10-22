@@ -2,6 +2,7 @@ import 'package:buddy_app/core/arch/event_bus.dart';
 import 'package:buddy_app/core/arch/load_state.dart';
 import 'package:buddy_app/core/arch/lru_cache.dart';
 import 'package:buddy_app/core/arch/repository.dart';
+import 'package:buddy_app/core/arch/time_sort.dart';
 import 'package:buddy_app/core/store.dart';
 import 'package:buddy_app/features/money/controller/spend_controller.dart';
 import 'package:buddy_app/features/money/data/money_store.dart';
@@ -102,5 +103,14 @@ void main() {
     expect(repo.length, 0);
     await repo.reload();
     expect(repo['X']?.qty, 1);
+  });
+
+  test('sortByTime: best keeps order, newest/oldest by date, undated last', () {
+    final items = [('b', DateTime(2026, 1, 2)), ('none', null), ('a', DateTime(2026, 1, 1)), ('c', DateTime(2026, 1, 3))];
+    String names(TimeSort s) => sortByTime(items, (e) => e.$2, s).map((e) => e.$1).join();
+    expect(names(TimeSort.best), 'bnoneac');
+    expect(names(TimeSort.newest), 'cbanone');
+    expect(names(TimeSort.oldest), 'abcnone');
+    expect(sortByTime(<(String, DateTime?)>[], (e) => e.$2, TimeSort.newest), isEmpty);
   });
 }

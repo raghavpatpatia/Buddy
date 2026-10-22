@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/arch/load_state.dart';
-import '../../../core/format.dart';
 import '../../../shared/ui.dart';
 import '../controller/mail_controller.dart';
 import '../data/mail_service.dart';
 import '../data/read_tracker.dart';
 import '../model/mail.dart';
 import 'compose_page.dart';
+import 'widgets.dart';
 import 'connect_sheet.dart';
 import 'reader_page.dart';
 
@@ -179,7 +179,15 @@ class _MailPageState extends State<MailPage> {
           else ...[
             if (c.items.isLoading) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
             if (c.items case Failed(:final message)) EmptyState(emoji: '📡', title: 'Offline?', subtitle: message),
-            if (c.items is Ready && items.isEmpty) const EmptyState(emoji: '✨', title: 'Nothing here', subtitle: 'Inbox zero vibes.'),
+            if (c.items is Ready && items.isEmpty)
+              mode is SearchMode
+                  ? const EmptyState(emoji: '🔍', title: 'No emails match', subtitle: 'Try other words, or check the spelling.')
+                  : const EmptyState(emoji: '✨', title: 'Nothing here', subtitle: 'Inbox zero vibes.'),
+            if (items.isNotEmpty && !selecting)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+                child: Text(c.unread == 0 ? 'All read' : '${c.unread} unread', style: tt.labelLarge?.copyWith(color: c.unread == 0 ? cs.onSurfaceVariant : cs.primary)),
+              ),
             for (final m in items)
               Card(
                 margin: const EdgeInsets.symmetric(vertical: 2),
@@ -192,10 +200,10 @@ class _MailPageState extends State<MailPage> {
                   onTap: selecting ? () => c.toggle(m.uid) : () => _open(m),
                   leading: selecting
                       ? Checkbox(value: c.selected.contains(m.uid), onChanged: (_) => c.toggle(m.uid))
-                      : CircleAvatar(backgroundColor: cs.surfaceContainerHighest, child: Text(m.from.isEmpty ? '?' : m.from[0].toUpperCase())),
+                      : MailAvatar(from: m.from, seen: m.seen),
                   title: Text(m.from, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: m.seen ? FontWeight.w500 : FontWeight.w800)),
-                  subtitle: Text(m.subject, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: Text(m.at == null ? '' : shortDate(m.at!), style: tt.labelSmall),
+                  subtitle: Text(m.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: m.seen ? null : TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+                  trailing: Text(m.at == null ? '' : shortDate(m.at!), style: m.seen ? tt.labelSmall : tt.labelSmall?.copyWith(color: cs.primary, fontWeight: FontWeight.w800)),
                 ),
               ),
             if (items.isNotEmpty && !selecting) Padding(padding: const EdgeInsets.only(top: 10), child: Text('Long-press to select emails.', textAlign: TextAlign.center, style: tt.bodySmall)),

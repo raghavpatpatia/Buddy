@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../features/phone/view/clean_page.dart';
 import '../features/health/view/fit_page.dart';
 import '../features/health/view/food_page.dart';
+import '../features/jobs/view/jobs_page.dart';
 import '../features/grow/view/learn_page.dart';
 import '../features/grow/view/news_page.dart';
 import '../features/grow/view/practice_page.dart';
@@ -74,6 +75,7 @@ SectionPage moneySection() => const SectionPage(title: 'Money', tabIndex: tabMon
       ('Spend', Icons.receipt_long_outlined, SpendPage()),
       ('Invest', Icons.show_chart, InvestPage()),
       ('Mail', Icons.mail_outline, MailPage()),
+      ('Jobs', Icons.work_outline, JobsPage()),
     ]);
 
 SectionPage phoneSection() => const SectionPage(title: 'Phone', tabIndex: tabPhone, tabs: [

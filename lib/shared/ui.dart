@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/arch/time_sort.dart';
+
 const pagePadding = EdgeInsets.fromLTRB(16, 4, 16, 24);
 const brandSeed = Color(0xFF26C6DA);
 
@@ -184,3 +186,32 @@ class WeekBars extends StatelessWidget {
 }
 
 String weekdayShort(DateTime d) => const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
+
+/// Compact "sort by" menu for a list; [labels] names each order the list offers.
+class SortButton extends StatelessWidget {
+  final TimeSort value;
+  final Map<TimeSort, String> labels;
+  final ValueChanged<TimeSort> onChanged;
+  const SortButton({super.key, required this.value, required this.labels, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuButton<TimeSort>(
+      tooltip: 'Sort',
+      initialValue: value,
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final MapEntry(key: s, value: label) in labels.entries) CheckedPopupMenuItem(value: s, checked: s == value, child: Text(label)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.swap_vert, size: 18, color: cs.primary),
+          const SizedBox(width: 4),
+          Text(labels[value]!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: cs.primary)),
+        ]),
+      ),
+    );
+  }
+}

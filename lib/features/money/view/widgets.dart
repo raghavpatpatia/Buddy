@@ -160,3 +160,30 @@ class BuddyTakeCard extends StatelessWidget {
     );
   }
 }
+
+/// Avatar for a mail row with a dot in front when the email hasn't been read yet.
+class MailAvatar extends StatelessWidget {
+  final String from;
+  final bool seen;
+  const MailAvatar({super.key, required this.from, required this.seen});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Semantics(
+      label: seen ? 'Read' : 'Unread',
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: seen ? Colors.transparent : cs.primary),
+        ),
+        const SizedBox(width: 6),
+        CircleAvatar(
+          backgroundColor: seen ? cs.surfaceContainerHighest : cs.primaryContainer,
+          child: Text(from.isEmpty ? '?' : from[0].toUpperCase(), style: TextStyle(fontWeight: seen ? FontWeight.w500 : FontWeight.w800)),
+        ),
+      ]),
+    );
+  }
+}

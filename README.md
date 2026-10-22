@@ -3,12 +3,12 @@
 A personal wellbeing companion for Android, built with Flutter. It has five tabs:
 
 - **Buddy:** quests, water, mood and talk.
-- **Grow:** learn, practice, news, courses and stars.
+- **Grow:** learn, practice, news (sortable by time), courses and stars.
 - **Health:** workouts, body and food.
-- **Money:** spend, invest and mail.
+- **Money:** spend, invest, mail (with unread markers) and jobs.
 - **Phone:** scroll tracking and the storage cleaner.
 
-Most work happens on the phone. Talk uses an on-device LLM, and the cloud brain (AWS Bedrock) is optional and capped by spend limits. A small optional AWS backend logs read receipts for mail you send.
+Most work happens on the phone. Talk uses an on-device LLM, and the cloud brain (AWS Bedrock) is optional and capped by spend limits. Jobs searches free public job boards and game studio careers pages, with no accounts or API keys. A small optional AWS backend logs read receipts for mail you send.
 
 ## Project layout
 
@@ -18,9 +18,9 @@ lib/
   app/                   BuddyApp, HomeShell, tab sections
   core/                  app-wide services: Store, Native channel, background jobs, formatting
     arch/                generic building blocks: EventBus, LoadState, AsyncController,
-                         Repository, PrefsRepository, LruCache, SafeNotifier
-  shared/                reusable widgets (ui, bot face, celebrate)
-  features/<feature>/    astro, grow, health, home, money, phone, settings, talk
+                         Repository, PrefsRepository, LruCache, SafeNotifier, TimeSort
+  shared/                reusable widgets (ui incl. SortButton, bot face, celebrate)
+  features/<feature>/    astro, grow, health, home, jobs, money, phone, settings, talk
     model/               plain data + pure logic (no Flutter, no I/O)
     data/                I/O: prefs, HTTP, IMAP/SMTP, native, model files
     controller/          ChangeNotifier state holders (one job each)
@@ -102,6 +102,17 @@ classDiagram
     +emit(Object)
   }
   class LruCache~K,V~
+  class TimeSort {
+    <<enumeration>>
+    best
+    newest
+    oldest
+  }
+  class sortByTime~T~ {
+    <<function>>
+    +sortByTime(items, at, sort) List~T~
+  }
+  sortByTime --> TimeSort
   ChangeNotifier <|-- SafeNotifier
   SafeNotifier <|-- AsyncController
   AsyncController --> LoadState
@@ -118,10 +129,10 @@ classDiagram
 | Observer | `SafeNotifier`/`ChangeNotifier` controllers and `PrefsRepository`, watched by `ListenableBuilder`; `EventBus` for cross-feature events (`MailOpened`) |
 | State | `LoadState` (Idle → Loading → Ready/Failed), `TalkPhase`, `PracticePhase`, `SessionPhase`, `ScanStatus`, `MailMode` |
 | Chain of Responsibility | Talk `ReplyChain`: Cloud → Local → Offline |
-| Strategy | Money `TxnSource`: `SmsTxnSource`, `EmailTxnSource` |
+| Strategy | Money `TxnSource`: `SmsTxnSource`, `EmailTxnSource`; Jobs `JobSource`: Himalayas, Remotive, Jobicy, Remote OK, Hacker News, game studio boards; `TimeSort` order for News and Jobs |
 | Repository | `Repository<K,T>` with `PrefsRepository` + `JsonCodec<T>` |
 | Command | Kotlin `ChannelHandler` routes: method name → action |
-| Singleton | `Store`, `Native`, `LocalBrain`, `CloudBrain`, `ModelDownloads` |
+| Singleton | `Store`, `Native`, `LocalBrain`, `CloudBrain`, `ModelDownloads`, `JobStore` |
 
 ### Async loading: newest load wins
 
@@ -164,7 +175,7 @@ flowchart LR
   ST --> SC[SpendController] --> SV[Spend view]
   SC -- totals only --> AI[AI insight]
   YF[Yahoo Finance] --> IC[Invest / Stock controllers] --> IV[Invest view]
-  MC[MailController<br/>MailMode] --> MV[Mail · Reader · Compose]
+  MC[MailController<br/>MailMode · unread count] --> MV[Mail · Reader · Compose<br/>dot + bold for unread]
   MC <--> IMAP[(IMAP / SMTP<br/>app password in secure storage)]
 ```
 
@@ -174,6 +185,43 @@ Rules enforced in code:
 - Only the amount, direction, date and bank are kept.
 - The AI sees totals only.
 - Sending or deleting mail always asks first.
+
+### Jobs: search, rank, suggest
+
+```mermaid
+flowchart LR
+  PS[Job profile sheet<br/>current job · years · roles · field · skills · place] --> JC[JobsController]
+  LOC[nearUser<br/>last location or time zone] --> JC
+  JC --> JS[JobSearch<br/>parallel, 1 h cache file]
+  JS --> S1[Himalayas] & S2[Remotive] & S3[Jobicy] & S4[Remote OK] & S5[Hacker News<br/>Who is hiring] & S6[Game studio boards<br/>Greenhouse · Ashby · SmartRecruiters]
+  JS --> RK[rankJobs<br/>role · field · skills · level · place · age]
+  RK --> V[Jobs view]
+  RK --> OP[Better opportunities<br/>step up · pay · remote · top studio]
+  RK --> GAP[skillGaps]
+  GAP --> PLAN[Career plan<br/>cloud brain, else quick plan]
+  JC --> PL[platformLinks<br/>LinkedIn · Naukri · Indeed · Google Jobs · Hitmarker · Wellfound · Glassdoor]
+```
+
+- The default profile is SDE-1 in game development, near you. More roles and fields can be picked, and "Anywhere" searches worldwide.
+- Each job gets a 0–100 match score. Scores under 30 and off-field crafts (art, design, producer) are left out unless you picked that role.
+- One source being down only shows "Couldn't reach …". Results are cached for an hour in their own file and used offline.
+- Only the profile and job titles go to the cloud brain, and only when you ask for a career plan.
+
+### Sorting by date and time
+
+News and Jobs use one generic helper: `sortByTime(items, at, TimeSort)` in `core/arch/time_sort.dart`, plus the shared `SortButton` widget. Each controller remembers its choice.
+
+| List | Default | Other orders |
+|---|---|---|
+| News | Top (feed order) | Newest, Oldest |
+| Jobs matches | Best match | Newest, Oldest |
+| Saved jobs | Newest | Oldest |
+
+Items without a date always go last.
+
+### Mail: read and unread
+
+Unread emails show a dot in front of the sender's avatar, a bold sender and subject, and a colored date. The list header says how many are unread ("3 unread" or "All read"). Opening an email marks it read in the list right away. The read flag comes from the server (IMAP `\Seen`), so it matches Gmail.
 
 ### Native bridge (Kotlin)
 

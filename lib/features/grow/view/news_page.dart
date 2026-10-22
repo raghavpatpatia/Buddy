@@ -35,7 +35,7 @@ class _NewsPageState extends State<NewsPage> {
   Widget _build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    final items = c.state is Failed ? const <NewsItem>[] : c.state.data;
+    final items = c.state is Failed ? const <NewsItem>[] : c.items;
     final error = switch (c.state) { Failed(:final message) => message, _ => null };
     return Column(children: [
       SizedBox(
@@ -52,6 +52,15 @@ class _NewsPageState extends State<NewsPage> {
           ],
         ),
       ),
+      if (items != null && items.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 8, 0),
+          child: Row(children: [
+            Text('${items.length} headlines', style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
+            const Spacer(),
+            SortButton(value: c.sort, labels: NewsController.sortLabels, onChanged: c.setSort),
+          ]),
+        ),
       Expanded(
         child: RefreshIndicator(
           onRefresh: () => c.load(force: true),
