@@ -1,8 +1,10 @@
 /// Amount and direction of one bank transaction; nothing else from the message is kept.
+/// [invest]: money moved into savings or investments (FD, RD, mutual fund, SIP), not spent.
 class ParsedTxn {
   final double amount;
   final bool debit;
-  const ParsedTxn(this.amount, this.debit);
+  final bool invest;
+  const ParsedTxn(this.amount, this.debit, {this.invest = false});
 }
 
 final _amount = RegExp(r'(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)', caseSensitive: false);
@@ -12,9 +14,12 @@ final _creditWord = RegExp(r'\b(credited|credit(?:ed)? (?:by|with)|received|depo
 final _skip = RegExp(
   r'\b(otp|one[- ]time password|will be debited|to be debited|due (?:on|date|amount)|bill (?:of|is) generated|minimum (?:amount )?due|'
   r'pre-?approved|offer|loan of|eligible|cashback up to|win|failed|declined|unsuccessful|request(?:ed)? (?:money|for)|collect request|'
-  r'emi of .* available|statement (?:for|of)|reward points?)\b',
+  r'emi of .* available|statement (?:for|of)|reward points?|'
+  // Notices about money that hasn't moved yet: mandates, scheduled debits, refunds only started.
+  r'will be (?:deducted|credited|processed)|has been initiated|initiated a refund|refund (?:is |has been )?initiated|e-?mandate|pre-?debit|scheduled)\b',
   caseSensitive: false,
 );
+final _invest = RegExp(r'\b(fd|rd|fixed deposit|recurring deposit|mutual funds?|sip|iccl|nps|ppf)\b', caseSensitive: false);
 final _balance = RegExp(r'\b(avl\.?|avail(?:able)?|a/c|acct?\.?)?\s*bal(?:ance)?\b', caseSensitive: false);
 
 ParsedTxn? parseTxn(String text) {
@@ -29,7 +34,7 @@ ParsedTxn? parseTxn(String text) {
   for (final m in _amount.allMatches(t)) {
     if (bal != null && m.start > bal.start && m.start - bal.end < 12) continue;
     final v = double.tryParse(m.group(1)!.replaceAll(',', ''));
-    if (v != null && v > 0 && v < 1e8) return ParsedTxn(v, debit);
+    if (v != null && v > 0 && v < 1e8) return ParsedTxn(v, debit, invest: debit && _invest.hasMatch(t));
   }
   return null;
 }
@@ -37,7 +42,7 @@ ParsedTxn? parseTxn(String text) {
 const _banks = {
   'HDFC': 'HDFC', 'SBI': 'SBI', 'ICICI': 'ICICI', 'AXIS': 'Axis', 'KOTAK': 'Kotak', 'PNB': 'PNB', 'YES': 'Yes Bank',
   'IDFC': 'IDFC First', 'INDUS': 'IndusInd', 'BOB': 'Bank of Baroda', 'BARODA': 'Bank of Baroda', 'CANARA': 'Canara',
-  'CANBNK': 'Canara', 'UNION': 'Union Bank', 'UBOI': 'Union Bank', 'PAYTM': 'Paytm', 'AIRTEL': 'Airtel Payments',
+  'CANBNK': 'Canara', 'UNION': 'Union Bank', 'UBOI': 'Union Bank', 'PAYTM': 'Paytm', 'AIRBNK': 'Airtel Payments', 'AIRTELPB': 'Airtel Payments',
   'FEDERAL': 'Federal', 'FEDBNK': 'Federal', 'IDBI': 'IDBI', 'AUBANK': 'AU Bank', 'RBL': 'RBL', 'AMEX': 'Amex',
   'SCB': 'Standard Chartered', 'HSBC': 'HSBC', 'CITI': 'Citi', 'JUPITER': 'Jupiter', 'SLICE': 'slice', 'ONECARD': 'OneCard',
 };
@@ -51,6 +56,13 @@ String bankName(String sender) {
   if (s.contains('@')) return s.split('@').last.split('.').first; // email: the domain, e.g. "SLICEIT"
   final parts = s.split(RegExp(r'[-@.]')).where((p) => p.length >= 3).toList();
   return parts.isEmpty ? 'Bank' : parts.length > 1 && s.contains('-') ? parts[1] : parts.first;
+}
+
+/// SMS from a bank, card or wallet (e.g. "VM-HDFCBK-S"), not from a shop or app ("JM-ZOMATO-S", "Airtel", a number):
+/// their "payment received" or "recharge credited" texts repeat or misdescribe what the bank already reported.
+bool isBankSmsSender(String addr) {
+  final code = addr.toUpperCase().split('-').where((p) => p.length >= 4).firstOrNull ?? addr.toUpperCase();
+  return _banks.keys.any(code.contains) || RegExp(r'(BNK|BANK|BK$|CARD)').hasMatch(code);
 }
 
 /// Bank / card / wallet alert senders only (by known bank or alert-style address).

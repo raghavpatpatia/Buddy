@@ -117,6 +117,24 @@ class _ScrollPageState extends State<ScrollPage> {
               action: 'Turn on',
               onTap: () => Native.open('accessibility'),
             ),
+          if (c.killerStruck)
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Your phone keeps switching tracking off', style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(
+                  'Its ${c.killer} battery manager closed Buddy ${c.killerTimes == 1 ? 'once' : '${c.killerTimes} times'}, and Android turns '
+                  'the scroll tracker off each time. Open ${c.killer}, allow Buddy (switch it off for Buddy or add it to the allowed list), '
+                  'then turn the tracker back on.',
+                  style: tt.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, children: [
+                  FilledButton.tonal(onPressed: () => Native.open('killer'), child: Text('Open ${c.killer}')),
+                  TextButton(onPressed: c.ackKiller, child: const Text('Done')),
+                ]),
+              ]),
+            ),
           if (c.usageOff)
             InfoBanner(icon: Icons.timer_outlined, text: 'Allow Usage access to see minutes per app.', action: 'Allow', onTap: () => Native.open('usage')),
           HeroCard(

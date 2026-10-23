@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../shared/bot_face.dart';
+import '../../backup/view/backup_card.dart';
 import '../../../shared/ui.dart';
 import '../controller/settings_controller.dart';
 
@@ -94,7 +95,9 @@ class _SetupPageState extends State<SetupPage> with WidgetsBindingObserver {
             const Center(child: BotFace(mood: 0.8, size: 140)),
             Text("Hi! I'm Buddy 👋", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
             const Text('Set me up once and I\'ll run 24x7 in the background.', textAlign: TextAlign.center),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            const RestoreOnSetupCard(),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Text('Permissions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -125,6 +128,13 @@ class _SetupPageState extends State<SetupPage> with WidgetsBindingObserver {
               c.native['accessibility'] == true,
               () => c.openSystem('accessibility'),
             ),
+            if (c.native['killer'] != null)
+              _step(
+                'Allow Buddy in ${c.native['killer']}',
+                'Your phone\'s own battery manager closes background apps, which switches the scroll tracker off. Allow Buddy there so it stays on.',
+                c.killerOpened,
+                () => c.openKiller(),
+              ),
             _step('Usage access', 'Screen time per app + finds apps you never use.', c.native['usage'] == true, () => c.openSystem('usage')),
             _step(
               'All files access',

@@ -51,7 +51,15 @@ class SentMode extends MailMode {
 class MailController extends SafeNotifier {
   MailController({ReadTracker? tracker}) : tracker = tracker ?? ReadTracker.instance {
     _opens = EventBus.instance.on<MailOpened>().listen((_) => notifyListeners());
+    // Last inbox, shown at once while the fresh one loads.
+    final cached = Store.getJson(_cacheKey) as List?;
+    if (cached != null) items = Ready([for (final j in cached) _decode(j as Map)]);
   }
+
+  static const _cacheKey = 'mail_cache_inbox';
+  static Map<String, Object?> _encode(MailItem m) => {'u': m.uid, 'f': m.from, 's': m.subject, 't': m.at?.millisecondsSinceEpoch, 'r': m.seen};
+  static MailItem _decode(Map j) =>
+      MailItem(j['u'] as int, j['f'] as String, j['s'] as String, j['t'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['t'] as int), j['r'] as bool);
 
   final ReadTracker tracker;
   late final StreamSubscription<MailOpened> _opens;
@@ -77,9 +85,12 @@ class MailController extends SafeNotifier {
     items = Loading(items.data);
     notifyListeners();
     try {
-      items = Ready(await mode.load());
+      final loaded = await mode.load();
+      items = Ready(loaded);
+      if (mode case InboxMode(filter: 0)) await Store.setJson(_cacheKey, [for (final m in loaded) _encode(m)]);
     } catch (_) {
-      items = const Failed('Couldn’t reach your mailbox. Pull to retry.');
+      // Keep showing what we had; just say it's not fresh.
+      items = Failed('Couldn’t reach your mailbox. Pull to retry.', items.data);
     }
     notifyListeners();
   }

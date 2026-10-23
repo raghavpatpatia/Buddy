@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Same as SystemColors in lib/shared/ui.dart. -->
-    <color name="buddy_mana">#FF3FB8FF</color>
-    <color name="buddy_void">#FF04060D</color>
+    <!-- Phone in light mode: Morning theme colours (see botColors in lib/core/game.dart). -->
+    <color name="buddy_mana">#FF2F80C8</color>
+    <color name="buddy_void">#FFF5F7FA</color>
 </resources>

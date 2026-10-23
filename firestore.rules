@@ -1,0 +1,10 @@
+rules_version = '2';
+
+// Each person's backup lives under users/{their uid}; nobody else can read or write it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

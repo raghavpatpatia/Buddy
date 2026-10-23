@@ -1,0 +1,16 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Buddy",
+        "supportEmail": "raghav.patpatia@gmail.com"
+      }
+    }
+  }
+}

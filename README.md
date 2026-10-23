@@ -6,21 +6,21 @@ A personal wellbeing companion for Android, built with Flutter. It has five tabs
 - **Grow:** learn, practice, news (sortable by time), courses and stars.
 - **Health:** workouts, body and food.
 - **Money:** spend, invest, mail (with unread markers) and jobs.
-- **Phone:** scroll tracking and the storage cleaner.
+- **Phone:** scroll tracking, the storage cleaner and offline maps (download an area, then get the fastest or shortest route with spoken turn-by-turn directions, even without internet).
 
-Most work happens on the phone. Talk uses an on-device LLM, and the cloud brain (AWS Bedrock) is optional and capped by spend limits. Jobs searches free public job boards and game studio careers pages, with no accounts or API keys. A small optional AWS backend logs read receipts for mail you send.
+Most work happens on the phone. Talk uses an on-device LLM, and the cloud brain (AWS Bedrock) is optional and capped by spend limits. Jobs searches free public job boards and game studio careers pages, with no accounts or API keys. A small optional AWS backend logs read receipts for mail you send. Map tiles come from [buddy-maps](https://github.com/raghavpatpatia/buddy-maps), a weekly GitHub Action that turns OpenStreetMap data into road tiles; routing on the phone uses a Customizable Contraction Hierarchy (`lib/features/nav/model/cch.dart`).
 
 ## Look and feel
 
-Buddy uses a dark "System" theme inspired by hunter-game HUDs. All art is original and drawn in code; nothing is copied from any show.
+Buddy uses calm, high-contrast themes meant to suit every age. All art is original and drawn in code.
 
-- **Background:** `SystemBackground` (`lib/shared/system_background.dart`) paints a night-blue sky, a faint hex grid, mana glow and light motes once behind every page.
-- **Panels:** cards are translucent "System windows" with a thin mana-blue border and glowing corner brackets (`SystemFrame`).
-- **Palette:** `SystemColors` in `lib/shared/ui.dart`: void black, mana blue, shadow violet. Titles, tabs and buttons use Rajdhani (SIL OFL, `assets/fonts`).
-- **Buddy:** a shadow-knight helm (`lib/shared/bot_face.dart`) with swept horns, a V visor, glowing slit eyes, a forehead gem and rising shadow flames. Eyes show mood (blue / bright when happy / violet when worried) and the vent grille pulses while he talks. Unlockable eye colours still apply.
+- **Themes:** twenty, in ten day + night pairs (`botColors` and `themePairs` in `lib/core/game.dart`), one pair unlocked per level: Morning · Midnight, Mint · Forest, Sand · Plum, Lavender · Dusk, Peach · Ember, Ocean · Deep Sea, Rose · Wine, Sunshine · Amber Night, Stone · Graphite, Pearl · Royal. Pick a pair under Trophies → Theme; the Day / Night switch (also in Settings → Appearance) follows the phone's dark mode until you choose, then keeps your choice. A theme recolours the whole app at once (`applyBotTheme`), keeping your place.
+- **Palette:** `SystemColors` in `lib/shared/ui.dart` holds the current theme's background, cards, accent, text accent and warm second colour; everything reads from it.
+- **Background and cards:** `SystemBackground` paints the theme's background with a faint wash of its accent; cards are plain and rounded with soft shadows (no glow). Text uses the phone's Roboto font.
+- **Buddy:** a shadow-knight helm (`lib/shared/bot_face.dart`) with swept horns, a V visor, glowing slit eyes, a forehead gem and rising shadow flames. Eyes glow in the theme's colours and show mood and the vent grille pulses while he talks. Unlockable eye colours still apply.
 - **Ranks:** E-Rank → S-Rank Hunter over levels 1–10, then National Level Hunter and Monarch. Level-ups appear as a `[SYSTEM]` message.
 - **Voice:** "Shadow voice" (`shadowize` in `lib/features/talk/data/robot_voice.dart`) turns the phone's TTS into a deep armoured voice. It pitches down about 3 semitones without slowing (two crossfaded delay-line heads), adds bass weight, rolls off the highs, adds soft drive, a helmet comb resonance and a short dark echo. It can be switched off in Buddy's brain settings.
-- **Icons:** the launcher icon (adaptive: sky background, helm foreground, monochrome themed layer), the Android 12+ splash and the status-bar icon all use the same helm. To regenerate after changing the art, run `flutter test tool/render_icons_test.dart && tool/install_icons.sh`. The notification vector is `res/drawable/ic_stat_buddy.xml`, and notifications are tinted mana blue.
+- **Icons:** the launcher icon and splash come in day (Morning) and night (Midnight) versions, picked by the phone's dark mode (adaptive: soft background, helm foreground, monochrome themed layer), the Android 12+ splash and the status-bar icon all use the same helm. To regenerate both after changing the art, run `flutter test tool/render_icons_test.dart && tool/install_icons.sh`. The notification vector is `res/drawable/ic_stat_buddy.xml`, and notifications are tinted Morning blue.
 
 ## Project layout
 

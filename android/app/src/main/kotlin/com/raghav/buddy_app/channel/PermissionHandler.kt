@@ -39,6 +39,9 @@ class PermissionHandler(private val ctx: Context) : ChannelHandler {
                     "allFiles" to Permissions.allFiles(),
                     "battery" to Permissions.battery(ctx),
                     "companion" to BuddyCore.prefs(ctx).getBoolean("companion_on", false),
+                    // The phone maker's battery manager that can switch the tracker off, if any (e.g. "DuraSpeed").
+                    "killer" to BuddyCore.backgroundKiller(ctx)?.first,
+                    "trackerOffCount" to BuddyCore.prefs(ctx).getInt("tracker_off_count", 0),
                 )
             )
         },
@@ -47,6 +50,10 @@ class PermissionHandler(private val ctx: Context) : ChannelHandler {
 
     private fun openSettings(what: String, pkg: String?) {
         val self = ctx.packageName
+        if (what == "killer") {
+            BuddyCore.backgroundKiller(ctx)?.let { ctx.startActivity(it.second) }
+            return
+        }
         val i = when (what) {
             "usage" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
             "accessibility" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)

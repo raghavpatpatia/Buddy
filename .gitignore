@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase config for the my-shadow-buddy project (safe in apps, kept out of this public repo)
+android/app/google-services.json

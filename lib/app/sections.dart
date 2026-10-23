@@ -11,6 +11,7 @@ import '../features/grow/view/toolbox_page.dart';
 import '../features/money/view/invest_page.dart';
 import '../features/money/view/mail_page.dart';
 import '../features/money/view/spend_page.dart';
+import '../features/nav/view/nav_page.dart';
 import '../features/phone/view/scroll_page.dart';
 
 /// App-wide navigation requests: (bottom tab, sub-tab). Used by Buddy's quick actions.
@@ -81,4 +82,5 @@ SectionPage moneySection() => const SectionPage(title: 'Money', tabIndex: tabMon
 SectionPage phoneSection() => const SectionPage(title: 'Phone', tabIndex: tabPhone, tabs: [
       ('Scroll', Icons.swipe_vertical_outlined, ScrollPage(embedded: true)),
       ('Clean', Icons.cleaning_services_outlined, CleanPage(embedded: true)),
+      ('Map', Icons.map_outlined, NavPage()),
     ]);

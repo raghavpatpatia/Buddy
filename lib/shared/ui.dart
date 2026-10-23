@@ -1,91 +1,111 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/arch/time_sort.dart';
 import 'system_background.dart';
 
 const pagePadding = EdgeInsets.fromLTRB(16, 4, 16, 24);
 
-/// The "System" palette: a near-black night sky, glowing mana blue and a shadow violet.
+/// The app palette, set by the selected theme (see botColors in core/game.dart): background, cards, an accent
+/// ([mana]), the accent for text and icons ([manaBright]) and a warm second colour ([shadow]).
+/// (Names kept from the earlier "System" look.)
 class SystemColors {
-  static const void_ = Color(0xFF04060D);
-  static const panel = Color(0xFF0A1122);
-  static const panelHigh = Color(0xFF111A33);
-  static const mana = Color(0xFF3FB8FF);
-  static const manaBright = Color(0xFF8FE3FF);
-  static const shadow = Color(0xFF8B5CF6);
-  static const text = Color(0xFFE6F1FF);
-  static const muted = Color(0xFF8A9BBF);
-  static const danger = Color(0xFFFF4D6D);
+  static bool light = true;
+  static Color void_ = const Color(0xFFF5F7FA);
+  static Color panel = const Color(0xFFFFFFFF);
+  static Color panelHigh = const Color(0xFFF0F5FB);
+  static Color mana = const Color(0xFF2F80C8);
+  static Color manaBright = const Color(0xFF1F5F99);
+  static Color shadow = const Color(0xFFE8A33D);
+  static Color text = const Color(0xFF1F2933);
+  static Color muted = const Color(0xFF5F6B7A);
+  static const danger = Color(0xFFD64545);
+
+  /// The accent (or [c]) mixed into the background at strength [a].
+  static Color tint(double a, [Color? c]) => Color.alphaBlend((c ?? mana).withValues(alpha: a), void_);
+
+  /// Recolours everything for a theme.
+  static void apply({required bool light, required Color background, required Color card, required Color accent, required Color bright, required Color flare}) {
+    SystemColors.light = light;
+    void_ = background;
+    panel = card;
+    panelHigh = light ? Color.alphaBlend(accent.withValues(alpha: 0.06), card) : Color.alphaBlend(Colors.white.withValues(alpha: 0.04), card);
+    mana = accent;
+    manaBright = bright;
+    shadow = flare;
+    text = light ? const Color(0xFF1F2933) : const Color(0xFFE8ECF1);
+    muted = light ? const Color(0xFF5F6B7A) : const Color(0xFF9AA5B4);
+  }
+
+  /// Readable text on the accent: dark on light accents, white on deeper ones.
+  static Color get onMana => mana.computeLuminance() > 0.4 ? const Color(0xFF14181F) : Colors.white;
 }
 
-/// Font for titles and numbers: sharp, game-HUD letters (Rajdhani, OFL).
-const hudFont = 'Rajdhani';
+/// Font for titles and numbers: the phone's own clear font, easy to read at any age.
+const hudFont = 'Roboto';
 
 /// Buddy is always dark: the System look doesn't exist in daylight. [b] is kept for the old call sites.
 ThemeData buddyTheme([Brightness b = Brightness.dark]) {
-  final cs = ColorScheme.fromSeed(seedColor: SystemColors.mana, brightness: Brightness.dark).copyWith(
+  final brightness = SystemColors.light ? Brightness.light : Brightness.dark;
+  final cs = ColorScheme.fromSeed(seedColor: SystemColors.mana, brightness: brightness).copyWith(
     primary: SystemColors.mana,
-    onPrimary: const Color(0xFF001424),
-    primaryContainer: const Color(0xFF0C2A4A),
-    onPrimaryContainer: SystemColors.manaBright,
+    onPrimary: SystemColors.onMana,
+    primaryContainer: SystemColors.tint(0.28),
+    onPrimaryContainer: SystemColors.light ? SystemColors.manaBright : SystemColors.text,
     secondary: SystemColors.shadow,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFF261A4D),
-    onSecondaryContainer: const Color(0xFFD9CCFF),
-    tertiary: const Color(0xFF5EEAD4),
-    tertiaryContainer: const Color(0xFF0E2F3A),
-    onTertiaryContainer: const Color(0xFFB9FFF3),
+    secondaryContainer: SystemColors.tint(0.2, SystemColors.shadow),
+    onSecondaryContainer: SystemColors.text,
+    tertiary: SystemColors.manaBright,
+    tertiaryContainer: SystemColors.tint(0.14),
+    onTertiaryContainer: SystemColors.text,
     error: SystemColors.danger,
     surface: SystemColors.void_,
     onSurface: SystemColors.text,
     onSurfaceVariant: SystemColors.muted,
-    surfaceContainerLowest: const Color(0xFF060914),
+    surfaceContainerLowest: SystemColors.void_,
     surfaceContainerLow: SystemColors.panel,
-    surfaceContainer: const Color(0xFF0D152B),
+    surfaceContainer: SystemColors.panelHigh,
     surfaceContainerHigh: SystemColors.panelHigh,
-    surfaceContainerHighest: const Color(0xFF17223F),
-    outline: const Color(0xFF2B4A73),
-    outlineVariant: const Color(0xFF1A2B47),
+    surfaceContainerHighest: SystemColors.tint(0.12),
+    outline: SystemColors.light ? const Color(0xFFB8C0CC) : const Color(0xFF3A4556),
+    outlineVariant: SystemColors.light ? const Color(0xFFE1E6ED) : const Color(0xFF2A3342),
   );
-  final edge = BorderSide(color: SystemColors.mana.withValues(alpha: 0.35));
-  const r10 = BorderRadius.all(Radius.circular(10));
+  // Soft edges: a hairline border in dark themes, none in light ones (cards lift with a gentle shadow instead).
+  final edge = SystemColors.light ? BorderSide.none : BorderSide(color: cs.outlineVariant);
+  const r10 = BorderRadius.all(Radius.circular(14));
   return ThemeData(
     colorScheme: cs,
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: brightness,
     // Transparent so the shared SystemBackground shows behind every page.
     scaffoldBackgroundColor: Colors.transparent,
     canvasColor: SystemColors.void_,
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      titleTextStyle: TextStyle(
-        fontFamily: hudFont,
-        fontSize: 30,
-        fontWeight: FontWeight.w700,
-        color: SystemColors.text,
-        letterSpacing: 1.5,
-        shadows: [Shadow(color: SystemColors.mana, blurRadius: 14)],
-      ),
+      foregroundColor: SystemColors.text,
+      systemOverlayStyle: SystemColors.light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      titleTextStyle: TextStyle(fontFamily: hudFont, fontSize: 24, fontWeight: FontWeight.w700, color: SystemColors.text),
     ),
     cardTheme: CardThemeData(
-      elevation: 0,
-      color: SystemColors.panel.withValues(alpha: 0.82),
+      elevation: SystemColors.light ? 1.5 : 0,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
+      color: SystemColors.panel,
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: r10, side: edge),
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 68,
-      backgroundColor: const Color(0xF2060A16),
+      backgroundColor: SystemColors.tint(0.03).withValues(alpha: 0.95),
       indicatorColor: SystemColors.mana.withValues(alpha: 0.18),
       indicatorShape: RoundedRectangleBorder(borderRadius: r10, side: edge),
       iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(color: s.contains(WidgetState.selected) ? SystemColors.manaBright : SystemColors.muted)),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (s) => TextStyle(
           fontFamily: hudFont,
-          fontSize: 14,
-          letterSpacing: 0.8,
+          fontSize: 13,
           color: s.contains(WidgetState.selected) ? SystemColors.manaBright : SystemColors.muted,
           fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w600,
         ),
@@ -96,13 +116,13 @@ ThemeData buddyTheme([Brightness b = Brightness.dark]) {
       unselectedLabelColor: SystemColors.muted,
       indicatorColor: SystemColors.mana,
       dividerColor: cs.outlineVariant,
-      labelStyle: const TextStyle(fontFamily: hudFont, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.8),
-      unselectedLabelStyle: const TextStyle(fontFamily: hudFont, fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.8),
+      labelStyle: const TextStyle(fontFamily: hudFont, fontSize: 15, fontWeight: FontWeight.w700),
+      unselectedLabelStyle: const TextStyle(fontFamily: hudFont, fontSize: 15, fontWeight: FontWeight.w500),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         shape: const RoundedRectangleBorder(borderRadius: r10),
-        textStyle: const TextStyle(fontFamily: hudFont, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.8),
+        textStyle: const TextStyle(fontFamily: hudFont, fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -110,7 +130,7 @@ ThemeData buddyTheme([Brightness b = Brightness.dark]) {
         shape: const RoundedRectangleBorder(borderRadius: r10),
         side: BorderSide(color: SystemColors.mana.withValues(alpha: 0.6)),
         foregroundColor: SystemColors.manaBright,
-        textStyle: const TextStyle(fontFamily: hudFont, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.8),
+        textStyle: const TextStyle(fontFamily: hudFont, fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: SystemColors.manaBright)),
@@ -131,17 +151,17 @@ ThemeData buddyTheme([Brightness b = Brightness.dark]) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: SystemColors.panelHigh,
-      contentTextStyle: const TextStyle(color: SystemColors.text),
+      contentTextStyle: TextStyle(color: SystemColors.text),
       shape: RoundedRectangleBorder(borderRadius: r10, side: edge),
     ),
     inputDecorationTheme: InputDecorationTheme(
       enabledBorder: OutlineInputBorder(borderRadius: r10, borderSide: BorderSide(color: SystemColors.mana.withValues(alpha: 0.35))),
-      focusedBorder: const OutlineInputBorder(borderRadius: r10, borderSide: BorderSide(color: SystemColors.mana, width: 1.6)),
+      focusedBorder: OutlineInputBorder(borderRadius: r10, borderSide: BorderSide(color: SystemColors.mana, width: 1.6)),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(color: SystemColors.mana, linearTrackColor: Color(0xFF17223F), circularTrackColor: Color(0xFF17223F)),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: SystemColors.mana, linearTrackColor: SystemColors.tint(0.17), circularTrackColor: SystemColors.tint(0.17)),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? SystemColors.manaBright : SystemColors.muted),
-      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? SystemColors.mana.withValues(alpha: 0.45) : const Color(0xFF17223F)),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? SystemColors.mana.withValues(alpha: 0.45) : SystemColors.tint(0.17)),
     ),
   );
 }

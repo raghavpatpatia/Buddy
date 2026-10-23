@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/game.dart';
 import '../../../core/store.dart';
 import '../../../shared/bot_face.dart';
+import '../../../shared/theme_picker.dart';
 import '../../../shared/ui.dart';
 
 class TrophiesPage extends StatefulWidget {
@@ -19,7 +19,6 @@ class _TrophiesPageState extends State<TrophiesPage> {
     final cs = Theme.of(context).colorScheme;
     final lvl = Store.level, xp = Store.xp;
     final earned = earnedTrophies.toSet();
-    final sel = selectedBotColor;
     return Scaffold(
       appBar: AppBar(title: const Text('Trophies')),
       body: ListView(padding: pagePadding, children: [
@@ -42,29 +41,12 @@ class _TrophiesPageState extends State<TrophiesPage> {
             ]),
           ]),
         ),
-        const SectionTitle('Buddy’s eye colour'),
-        AppCard(
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in botColors)
-              ChoiceChip(
-                avatar: c.unlocked
-                    ? CircleAvatar(
-                        radius: 8,
-                        backgroundColor: c.color ?? (c.id == 'rainbow' ? Colors.pinkAccent : cs.primary),
-                      )
-                    : const Icon(Icons.lock, size: 16),
-                label: Text(c.unlocked ? c.name : '${c.name} · Lv ${c.unlockLevel}'),
-                selected: sel.id == c.id,
-                onSelected: c.unlocked
-                    ? (_) {
-                        HapticFeedback.selectionClick();
-                        Store.raw.setString('bot_color', c.id);
-                        setState(() {});
-                      }
-                    : null,
-              ),
-          ]),
+        const SectionTitle('Theme'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text('Pick a colour family, then switch between its day and night look.', style: tt.bodySmall),
         ),
+        const AppCard(padding: EdgeInsets.zero, child: ThemePicker()),
         const SectionTitle('Ranks'),
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: 6),

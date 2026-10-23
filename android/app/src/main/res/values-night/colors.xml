@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phone in dark mode: Midnight theme colours (see botColors in lib/core/game.dart). -->
+    <color name="buddy_mana">#FF6FA3DF</color>
+    <color name="buddy_void">#FF121A24</color>
+</resources>

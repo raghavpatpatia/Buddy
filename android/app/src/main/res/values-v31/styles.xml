@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ system splash: dark background, adaptive app icon (the helm) in the middle. -->
+    <!-- Android 12+ system splash: day or night background (by phone dark mode), the helm icon in the middle. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
         <item name="android:windowSplashScreenBackground">@color/buddy_void</item>

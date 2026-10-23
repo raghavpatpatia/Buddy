@@ -34,6 +34,38 @@ void main() {
     });
   });
 
+  group('real-world messages that must not count as spending or income', () {
+    test('notices about money that has not moved yet', () {
+      expect(parseTxn('E-Mandate! Rs.1100.00 will be deducted on 02/10/26, 00:00:00 For ICCL - Mutual Funds - Autopay mandate'), isNull);
+      expect(parseTxn('We have initiated a refund of Rs.188.00 for ORD123 into your UPI, which should reflect in 3-5 business days.'), isNull);
+      expect(parseTxn('Refund of Rs. 611.34 for your order has been initiated and will be credited by Oct 17.'), isNull);
+      expect(parseTxn('We have processed a refund of Rs.10.00. It will be credited to your account within 5-7 business days.'), isNull);
+    });
+
+    test('savings and investments are flagged, not treated as spending', () {
+      final fd = parseTxn('UPDATE: INR 1,00,000.00 debited from HDFC Bank XX12 on 15-SEP-26. Info: FD through MOBILE. Avl bal:INR 3,57,112.12')!;
+      expect((fd.amount, fd.debit, fd.invest), (100000, true, true));
+      expect(parseTxn('Rs 5000 debited for SIP in mutual fund')!.invest, isTrue);
+      expect(parseTxn('Sent Rs.466.00 From HDFC Bank A/C XX12 To Blinkit Foods Limited On 18/10/26')!.invest, isFalse);
+    });
+
+    test('only bank, card and wallet senders count; shops and apps do not', () {
+      for (final bank in ['AD-HDFCBK-S', 'CP-HDFCBN-S', 'VM-YESBNK-T', 'AX-SBIINB-S', 'JD-ICICIT-S', 'BP-KOTAKB-S', 'VM-PAYTMB-S']) {
+        expect(isBankSmsSender(bank), isTrue, reason: bank);
+      }
+      for (final shop in ['JM-ZOMATO-S', 'VA-BSTRO-S', 'AD-PAYUMN-S', 'CP-CRIBIN-S', 'Airtel', 'AH-650022-P', 'VM-SWIGGY-S']) {
+        expect(isBankSmsSender(shop), isFalse, reason: shop);
+      }
+    });
+
+    test('UPI "Sent Rs" alerts read correctly', () {
+      final p = parseTxn('Sent Rs.1400.00 From HDFC Bank A/C *1234 To HOTEL BIRIYANI On 22/10/26 Ref 123456789012 Not You?')!;
+      expect((p.amount, p.debit), (1400, true));
+      final c = parseTxn('Credit Alert! Rs.270.00 credited to HDFC Bank A/c XX12 on 22-10-26 from VPA x@okicici (UPI 1234)')!;
+      expect((c.amount, c.debit), (270, false));
+    });
+  });
+
   test('bank names from SMS sender IDs and email addresses', () {
     expect(bankName('VM-HDFCBK'), 'HDFC');
     expect(bankName('AD-SBIINB-S'), 'SBI');

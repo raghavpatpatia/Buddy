@@ -161,7 +161,7 @@ class _BuddyPageState extends State<BuddyPage> with WidgetsBindingObserver {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                      Text('${rankFor(lvl)} · ${100 - xp % 100} XP to Lv ${lvl + 1}', maxLines: 2, style: const TextStyle(fontFamily: hudFont, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: SystemColors.manaBright, height: 1.15)),
+                      Text('${rankFor(lvl)} · ${100 - xp % 100} XP to Lv ${lvl + 1}', maxLines: 2, style: TextStyle(fontFamily: hudFont, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.4, color: SystemColors.manaBright, height: 1.15)),
                     ]),
                   ),
                   Badge(
@@ -381,7 +381,7 @@ class _SpeechBubble extends StatelessWidget {
   const _SpeechBubble({required this.text, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    const c = SystemColors.panel;
+    final c = SystemColors.panel;
     return Column(
       children: [
         GestureDetector(
@@ -403,7 +403,7 @@ class _SpeechBubble extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(children: [
-                    const Text('[ SYSTEM ]', style: TextStyle(fontFamily: hudFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 3, color: SystemColors.mana)),
+                    Text('[ SYSTEM ]', style: TextStyle(fontFamily: hudFont, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 3, color: SystemColors.mana)),
                     const SizedBox(height: 4),
                     Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, height: 1.3)),
                     const SizedBox(height: 4),
@@ -463,7 +463,7 @@ class _LevelRing extends StatelessWidget {
         ),
         Column(mainAxisSize: MainAxisSize.min, children: [
           Text('LV', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: cs.onSurfaceVariant, height: 1)),
-          Text('$level', style: const TextStyle(fontFamily: hudFont, fontSize: 22, fontWeight: FontWeight.w700, height: 1.0, color: SystemColors.manaBright)),
+          Text('$level', style: TextStyle(fontFamily: hudFont, fontSize: 22, fontWeight: FontWeight.w700, height: 1.0, color: SystemColors.manaBright)),
         ]),
       ]),
     );

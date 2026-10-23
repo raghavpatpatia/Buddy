@@ -1,9 +1,11 @@
-// Renders Buddy's launcher icon layers from the in-app helm art.
+// Renders Buddy's launcher icon layers from the in-app helm art, in a day (Morning) and a night (Midnight)
+// version; Android shows the night one when the phone is in dark mode.
 // Run: flutter test tool/render_icons_test.dart && tool/install_icons.sh
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:buddy_app/core/game.dart';
 import 'package:buddy_app/core/store.dart';
 import 'package:buddy_app/shared/bot_face.dart';
 import 'package:buddy_app/shared/ui.dart';
@@ -40,7 +42,7 @@ class _Sky extends CustomPainter {
   @override
   void paint(Canvas c, Size s) {
     final r = Offset.zero & s;
-    c.drawRect(r, Paint()..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0A1430), Color(0xFF04060D), Color(0xFF0D0724)]).createShader(r));
+    c.drawRect(r, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [SystemColors.tint(0.10), SystemColors.void_, SystemColors.tint(0.16)]).createShader(r));
     c.drawCircle(r.center, s.width * 0.55, Paint()..shader = RadialGradient(colors: [SystemColors.mana.withValues(alpha: 0.35), SystemColors.shadow.withValues(alpha: 0.12), Colors.transparent]).createShader(Rect.fromCircle(center: r.center, radius: s.width * 0.55)));
     const hex = 30.0;
     final w = sqrt(3) * hex;
@@ -112,12 +114,16 @@ void main() {
     // ignore: invalid_use_of_visible_for_testing_member
     SharedPreferences.setMockInitialValues({});
     await Store.init();
-    await t.runAsync(() async {
-      await _render(_Sky(), _size, 'background');
-      await _render(_Helm(), _size, 'foreground');
-      await _render(_Mono(), _size, 'monochrome');
-      await _render(_Legacy(), 192, 'legacy');
-      await _render(_Legacy(), 512, 'playstore');
-    });
+    for (final (mode, id) in [('day', 'auto'), ('night', 'midnight')]) {
+      final t0 = botColors.firstWhere((c) => c.id == id);
+      SystemColors.apply(light: t0.light, background: t0.background, card: t0.card, accent: t0.accent, bright: t0.bright, flare: t0.flare);
+      await t.runAsync(() async {
+        await _render(_Sky(), _size, '$mode/background');
+        await _render(_Helm(), _size, '$mode/foreground');
+        await _render(_Mono(), _size, '$mode/monochrome');
+        await _render(_Legacy(), 192, '$mode/legacy');
+        await _render(_Legacy(), 512, '$mode/playstore');
+      });
+    }
   });
 }

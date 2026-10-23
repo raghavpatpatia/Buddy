@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:enough_mail/enough_mail.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../core/arch/lru_cache.dart';
 import '../../../core/format.dart';
 import '../../../core/store.dart';
 import '../model/mail.dart';
@@ -34,6 +36,7 @@ class MailAccount {
 
   /// Verifies the login before saving anything.
   static Future<void> link(String addr, String appPassword) async {
+    await MailService.close();
     final pass = appPassword.replaceAll(' ', '');
     await Store.raw.setString('mail_address', addr.trim());
     _password = pass;
@@ -49,6 +52,8 @@ class MailAccount {
   }
 
   static Future<void> unlink() async {
+    await MailService.close();
+    await Store.raw.remove('mail_cache_inbox');
     await Store.raw.remove('mail_address');
     await _storage.delete(key: 'mail_password');
     _password = null;
@@ -66,16 +71,48 @@ class MailService {
 
   static int _inboxCount = 0;
 
-  static Future<T> _with<T>(Future<T> Function(ImapClient) f) async {
-    final c = await _imap();
-    try {
-      return await f(c);
-    } finally {
+  // One logged-in connection, reused: connecting + TLS + login + selecting the inbox costs seconds every time.
+  static ImapClient? _client;
+  static Timer? _idle;
+  static Future<void> _queue = Future.value();
+
+  /// Runs [f] on the shared connection, one call at a time (IMAP is one conversation). A reused connection that
+  /// went stale is replaced once; the connection closes after 2 idle minutes.
+  static Future<T> _with<T>(Future<T> Function(ImapClient) f) {
+    final done = Completer<T>();
+    _queue = _queue.then((_) async {
+      _idle?.cancel();
       try {
-        await c.logout();
-      } catch (_) {}
-    }
+        final reused = _client != null;
+        try {
+          done.complete(await f(_client ??= await _imap()));
+        } catch (_) {
+          await close();
+          if (!reused) rethrow;
+          done.complete(await f(_client = await _imap()));
+        }
+      } catch (e, st) {
+        await close();
+        done.completeError(e, st);
+      } finally {
+        _idle = Timer(const Duration(minutes: 2), () => _queue = _queue.then((_) => close()));
+      }
+    });
+    return done.future;
   }
+
+  /// Logs out of the shared connection (idle timeout, account removed).
+  static Future<void> close() async {
+    _idle?.cancel();
+    final c = _client;
+    _client = null;
+    try {
+      await c?.logout();
+    } catch (_) {}
+  }
+
+  /// Opened emails, so reading one again is instant.
+  static final _opened = LruCache<int, MailMessage>(capacity: 20, ttl: const Duration(minutes: 30));
 
   static List<MailItem> _items(FetchImapResult r) => [
         for (final m in r.messages.reversed)
@@ -90,6 +127,8 @@ class MailService {
 
   /// Newest [count] inbox emails (headers only).
   static Future<List<MailItem>> inbox({int count = 40}) => _with((c) async {
+        // Re-selecting on a reused connection picks up new mail.
+        _inboxCount = (await c.selectInbox()).messagesExists;
         if (_inboxCount == 0) return <MailItem>[];
         return _items(await c.fetchRecentMessages(messageCount: count, criteria: '(UID FLAGS ENVELOPE)'));
       });
@@ -106,7 +145,9 @@ class MailService {
       });
 
   /// Full email for the reader (marks it read, like opening it in Gmail). Attachments stay in memory until downloaded.
-  static Future<MailMessage> read(int uid) => _with((c) async {
+  static Future<MailMessage> read(int uid) async => _opened.get(uid) ?? _opened.putAndReturn(uid, await _fetch(uid));
+
+  static Future<MailMessage> _fetch(int uid) => _with((c) async {
         final r = await c.uidFetchMessages(MessageSequence.fromIds([uid], isUid: true), 'BODY[]');
         final m = r.messages.first;
         final f = m.from?.firstOrNull;
@@ -253,7 +294,9 @@ class MailService {
             final text = m.decodeTextPlainPart() ?? _stripHtml(m.decodeTextHtmlPart() ?? '');
             final p = parseTxn('${m.decodeSubject() ?? ''} . $text');
             if (p == null) continue;
-            out.add(Txn(id: 'mail_${m.uid}', amount: p.amount, debit: p.debit, at: m.decodeDate() ?? DateTime.now(), bank: bankName(from), source: 'email'));
+            out.add(Txn(
+                id: 'mail_${m.uid}', amount: p.amount, debit: p.debit, at: m.decodeDate() ?? DateTime.now(), bank: bankName(from), source: 'email',
+                category: p.invest ? 'Invest' : null, hidden: p.invest));
           }
         }
         return out;

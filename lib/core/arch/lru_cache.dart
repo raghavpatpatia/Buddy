@@ -19,5 +19,11 @@ class LruCache<K, V> {
     if (_map.length > capacity) _map.remove(_map.keys.first);
   }
 
+  /// [put] that hands the value back, for `cache.get(k) ?? cache.putAndReturn(k, await load())`.
+  V putAndReturn(K key, V value) {
+    put(key, value);
+    return value;
+  }
+
   int get length => _map.length;
 }

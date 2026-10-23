@@ -104,7 +104,7 @@ class ReadTracker {
       title: first ? '👀 ${t.to} opened your email' : '👀 ${t.to} opened it again',
       body: '“${t.subject}” · $h:${at.minute.toString().padLeft(2, '0')} ${at.hour < 12 ? 'AM' : 'PM'}',
       notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails('buddy_mail_open', 'Email opened', channelDescription: 'When someone opens an email you sent with Buddy', importance: Importance.defaultImportance, color: Color(0xFF3FB8FF)),
+        android: AndroidNotificationDetails('buddy_mail_open', 'Email opened', channelDescription: 'When someone opens an email you sent with Buddy', importance: Importance.defaultImportance, color: Color(0xFF2F80C8)),
       ),
     );
   }

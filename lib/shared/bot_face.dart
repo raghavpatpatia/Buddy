@@ -101,7 +101,7 @@ class HelmPainter extends CustomPainter {
   final String? emotion;
   HelmPainter({required this.mood, this.emotion, this.blink = 0, this.lookX = 0, this.lookY = 0, this.talk = 0, this.glow = 0});
 
-  /// Eye colour: mana blue by default, brighter when happy, shadow violet when worried; unlockable colours override.
+  /// Eye colour: violet by default, brighter lilac when happy, fuchsia when worried; unlockable colours override.
   Color get _led {
     final pick = selectedBotColor;
     if (pick.id == 'rainbow') return HSVColor.fromAHSV(1, (glow * 360 * 2) % 360, 0.65, 1).toColor();
@@ -164,7 +164,7 @@ class HelmPainter extends CustomPainter {
         ..quadraticBezierTo(w * x(0.9), h * 0.2, w * x(0.97), h * 0.03)
         ..quadraticBezierTo(w * x(0.88), h * 0.24, w * x(0.79), h * 0.36)
         ..close();
-      c.drawPath(horn, Paint()..shader = LinearGradient(colors: const [Color(0xFF3D4A7A), Color(0xFF0B0E1C)], begin: Alignment(dx, -1), end: Alignment(-dx, 1)).createShader(Rect.fromLTWH(0, 0, w, h * 0.4)));
+      c.drawPath(horn, Paint()..shader = LinearGradient(colors: [SystemColors.tint(0.34), SystemColors.tint(0.05)], begin: Alignment(dx, -1), end: Alignment(-dx, 1)).createShader(Rect.fromLTWH(0, 0, w, h * 0.4)));
       c.drawPath(horn, Paint()..style = PaintingStyle.stroke..strokeWidth = w * 0.014..color = led.withValues(alpha: 0.3)..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.012));
       c.drawPath(horn, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.4..color = led.withValues(alpha: 0.85));
     }
@@ -172,7 +172,7 @@ class HelmPainter extends CustomPainter {
     // Helm body: dark metal with a mana rim light.
     final helm = _helm(s);
     c.drawPath(helm.shift(Offset(0, h * 0.025)), Paint()..color = Colors.black.withValues(alpha: 0.55)..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.03));
-    c.drawPath(helm, Paint()..shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF323C63), Color(0xFF10142A), Color(0xFF040509)], stops: [0, 0.5, 1]).createShader(Offset.zero & s));
+    c.drawPath(helm, Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [SystemColors.tint(0.27), SystemColors.tint(0.1), const Color(0xFF030205)], stops: [0, 0.5, 1]).createShader(Offset.zero & s));
     c.drawPath(helm, Paint()..style = PaintingStyle.stroke..strokeWidth = w * 0.022..color = led.withValues(alpha: 0.35)..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.02));
     c.drawPath(helm, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.6..color = led.withValues(alpha: 0.85));
 

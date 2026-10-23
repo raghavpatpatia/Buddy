@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import '../core/game.dart';
 import '../core/store.dart';
 import '../features/grow/data/growth_service.dart';
 import '../features/grow/view/growth_page.dart';
@@ -23,8 +24,34 @@ class BuddyApp extends StatefulWidget {
   State<BuddyApp> createState() => _BuddyAppState();
 }
 
-class _BuddyAppState extends State<BuddyApp> {
+class _BuddyAppState extends State<BuddyApp> with WidgetsBindingObserver {
   bool _setup = Store.raw.getBool('setup_done') == true;
+
+  @override
+  void initState() {
+    super.initState();
+    themeChanges.addListener(_retheme);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Phone switched dark mode on or off: follow it, unless a day / night choice is saved.
+  @override
+  void didChangePlatformBrightness() {
+    if (!nightModeChosen) applyBotTheme();
+  }
+
+  @override
+  void dispose() {
+    themeChanges.removeListener(_retheme);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// New theme: rebuild the theme and every widget that reads the palette, keeping screens and state.
+  void _retheme() {
+    setState(() {});
+    WidgetsBinding.instance.reassembleApplication();
+  }
 
   @override
   Widget build(BuildContext context) {

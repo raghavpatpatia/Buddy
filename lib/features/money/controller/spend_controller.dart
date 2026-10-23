@@ -100,23 +100,38 @@ class SpendController extends SafeNotifier {
     return [for (final d in days) (d, byDay[d]!)];
   }
 
+  /// Version of the message-reading rules; when it goes up, saved transactions are read again once.
+  static const parseVersion = 2;
+
   /// Pulls new transactions from every enabled source since the last sync (90 days the first time); null if a sync is already running.
   Future<int?> syncNow() async {
     if (sync.isLoading) return null;
     sync = const Loading();
     notifyListeners();
     try {
-      final since = lastSync?.subtract(const Duration(days: 2)) ?? DateTime.now().subtract(const Duration(days: 90));
+      final reread = (Store.raw.getInt('money_parse_v') ?? 1) < parseVersion;
+      final since = reread || lastSync == null ? DateTime.now().subtract(const Duration(days: 90)) : lastSync!.subtract(const Duration(days: 2));
       final found = <Txn>[];
+      var allRead = true;
       for (final s in _sources.where((s) => s.enabled)) {
         try {
           found.addAll(await s.fetchSince(since));
         } catch (e) {
+          allRead = false;
           debugPrint('[Spend] ${s.runtimeType} failed: $e');
         }
       }
-      final added = await _merge(found);
+      // Re-reading: replace saved transactions only from sources that were just read successfully.
+      final kept = reread ? await _dropSynced({for (final t in found) t.source}) : const <String, Txn>{};
+      // Keep the user's own category / hidden choices for transactions that are read again.
+      final restored = [
+        for (final t in found)
+          if (kept[t.id] case final old?) old.category != null || old.hidden ? t.copyWith(category: old.category ?? t.category, hidden: old.hidden || t.hidden) : t else t,
+      ];
+      final added = await _merge(restored);
+      await _markOwnTransfers();
       await Store.raw.setInt('money_synced', DateTime.now().millisecondsSinceEpoch);
+      if (reread && allRead) await Store.raw.setInt('money_parse_v', parseVersion);
       sync = Ready(added);
       return added;
     } catch (e) {
@@ -144,6 +159,37 @@ class SpendController extends SafeNotifier {
     }
     if (fresh.isNotEmpty) await _txns.putAll(fresh);
     return fresh.length;
+  }
+
+  /// Removes saved transactions from [sources] (cash entries stay) so they're read again with the current rules;
+  /// returns the removed ones by id, to carry the user's choices over.
+  Future<Map<String, Txn>> _dropSynced(Set<String> sources) async {
+    final old = {for (final t in _txns.all.where((t) => sources.contains(t.source))) t.id: t};
+    for (final id in old.keys) {
+      await _txns.remove(id);
+    }
+    return old;
+  }
+
+  /// Money moved between the user's own accounts shows up as a debit in one bank and the same credit in another
+  /// within minutes. Neither side is spending or income: both are tagged Transfer and left out of the totals.
+  Future<void> _markOwnTransfers() async {
+    final ts = _txns.all.where((t) => t.source != 'cash' && t.category == null && !t.hidden).toList()..sort((a, b) => a.at.compareTo(b.at));
+    final paired = <Txn>[];
+    final used = <String>{};
+    for (var i = 0; i < ts.length; i++) {
+      final a = ts[i];
+      if (used.contains(a.id)) continue;
+      for (var j = i + 1; j < ts.length && ts[j].at.difference(a.at).inMinutes <= 30; j++) {
+        final b = ts[j];
+        if (!used.contains(b.id) && b.amount == a.amount && b.debit != a.debit && b.bank != a.bank) {
+          used.addAll([a.id, b.id]);
+          paired.addAll([a.copyWith(category: 'Transfer', hidden: true), b.copyWith(category: 'Transfer', hidden: true)]);
+          break;
+        }
+      }
+    }
+    if (paired.isNotEmpty) await _txns.putAll(paired);
   }
 
   /// True when SMS permission was denied with "don't ask again"; only Settings can grant it then.

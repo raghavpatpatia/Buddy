@@ -1,5 +1,8 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
+import '../shared/ui.dart';
 import 'store.dart';
 
 // ---------------- Ranks ----------------
@@ -11,28 +14,110 @@ const _ranks = [
 /// Hunter rank for a level: E to S over the first ten levels, then National Level and Monarch.
 String rankFor(int level) => level <= _ranks.length ? _ranks[level - 1] : (level < 20 ? 'National Level Hunter' : 'Monarch');
 
-// ---------------- Buddy eye colours (unlock by level) ----------------
+// ---------------- Themes (unlock by level) ----------------
+/// A calm colour theme for the whole app (light or dark) and Buddy's eyes, which glow in the theme's colours by
+/// mood. [accent] fills buttons; [bright] is the accent for text and icons (darker on light themes, lighter on
+/// dark ones); [flare] is a warm second colour.
 class BotColor {
   final String id, name;
-  final Color? color; // null = mood-based (auto); rainbow handled by the painter
+  final Color? color; // fixed eye colour; null = mood-based in the theme's colours
   final int unlockLevel;
-  const BotColor(this.id, this.name, this.color, this.unlockLevel);
+  final bool light;
+  final Color background, card, accent, bright, flare;
+  const BotColor(this.id, this.name, this.color, this.unlockLevel,
+      {required this.light, required this.background, required this.card, required this.accent, required this.bright, required this.flare});
+
   bool get unlocked => Store.level >= unlockLevel;
 }
 
+/// Soft, high-contrast themes for every age: a day (light) and night (dark, deep grey-navy rather than pure black)
+/// pair for each of the ten levels, so every level-up unlocks a new pair.
 const botColors = [
-  BotColor('auto', 'Mana (auto)', null, 1),
-  BotColor('emerald', 'Emerald', Color(0xFF2EE59D), 2),
-  BotColor('crimson', 'Crimson', Color(0xFFFF4D6D), 4),
-  BotColor('violet', 'Violet', Color(0xFFB388FF), 6),
-  BotColor('gold', 'Gold', Color(0xFFFFC94D), 8),
-  BotColor('rainbow', 'Rainbow', null, 10),
+  // Lv 1
+  BotColor('auto', 'Morning', null, 1, light: true, background: Color(0xFFF5F7FA), card: Color(0xFFFFFFFF), accent: Color(0xFF2F80C8), bright: Color(0xFF1F5F99), flare: Color(0xFFE8A33D)),
+  BotColor('midnight', 'Midnight', null, 1, light: false, background: Color(0xFF121A24), card: Color(0xFF1B2533), accent: Color(0xFF6FA3DF), bright: Color(0xFFA9CBF0), flare: Color(0xFFE5B567)),
+  // Lv 2
+  BotColor('mint', 'Mint', null, 2, light: true, background: Color(0xFFF3F8F6), card: Color(0xFFFFFFFF), accent: Color(0xFF1E9E8C), bright: Color(0xFF157567), flare: Color(0xFFE9A23B)),
+  BotColor('forest', 'Forest', null, 2, light: false, background: Color(0xFF111A15), card: Color(0xFF1A271F), accent: Color(0xFF7FB894), bright: Color(0xFFB4DCC2), flare: Color(0xFFE0B872)),
+  // Lv 3
+  BotColor('sand', 'Sand', null, 3, light: true, background: Color(0xFFFAF6F0), card: Color(0xFFFFFFFF), accent: Color(0xFFC4683C), bright: Color(0xFF96461F), flare: Color(0xFF5E8B6A)),
+  BotColor('plum', 'Plum', null, 3, light: false, background: Color(0xFF191320), card: Color(0xFF241B2D), accent: Color(0xFFB58FD6), bright: Color(0xFFD9C2EE), flare: Color(0xFFE79BA6)),
+  // Lv 4
+  BotColor('lavender', 'Lavender', null, 4, light: true, background: Color(0xFFF6F4FB), card: Color(0xFFFFFFFF), accent: Color(0xFF7C5CBF), bright: Color(0xFF5B3E99), flare: Color(0xFFE59AB4)),
+  BotColor('dusk', 'Dusk', null, 4, light: false, background: Color(0xFF15152A), card: Color(0xFF1F1F38), accent: Color(0xFFA99BE6), bright: Color(0xFFCFC6F5), flare: Color(0xFFF2B6C6)),
+  // Lv 5
+  BotColor('peach', 'Peach', null, 5, light: true, background: Color(0xFFFDF5F0), card: Color(0xFFFFFFFF), accent: Color(0xFFE07A5F), bright: Color(0xFFB4513A), flare: Color(0xFF3D8C95)),
+  BotColor('ember', 'Ember', null, 5, light: false, background: Color(0xFF1C1512), card: Color(0xFF28201B), accent: Color(0xFFE89B6C), bright: Color(0xFFF5C6A5), flare: Color(0xFF7FB8BF)),
+  // Lv 6
+  BotColor('ocean', 'Ocean', null, 6, light: true, background: Color(0xFFF1F8FA), card: Color(0xFFFFFFFF), accent: Color(0xFF1B8AA6), bright: Color(0xFF136478), flare: Color(0xFFF2A65A)),
+  BotColor('deepsea', 'Deep Sea', null, 6, light: false, background: Color(0xFF0E1A20), card: Color(0xFF16262E), accent: Color(0xFF5DB7CF), bright: Color(0xFFA6DCEA), flare: Color(0xFFF2B880)),
+  // Lv 7
+  BotColor('rose', 'Rose', null, 7, light: true, background: Color(0xFFFBF4F5), card: Color(0xFFFFFFFF), accent: Color(0xFFC2546E), bright: Color(0xFF95374F), flare: Color(0xFF6B9E8A)),
+  BotColor('wine', 'Wine', null, 7, light: false, background: Color(0xFF1C1216), card: Color(0xFF281A20), accent: Color(0xFFE08FA3), bright: Color(0xFFF3C3CF), flare: Color(0xFF9CC5B4)),
+  // Lv 8
+  BotColor('sunshine', 'Sunshine', null, 8, light: true, background: Color(0xFFFCF8EE), card: Color(0xFFFFFFFF), accent: Color(0xFFD99A1E), bright: Color(0xFF9A6B0C), flare: Color(0xFF4F7CAC)),
+  BotColor('ambernight', 'Amber Night', null, 8, light: false, background: Color(0xFF1A1710), card: Color(0xFF262118), accent: Color(0xFFE6B84D), bright: Color(0xFFF3D892), flare: Color(0xFF8FB0D6)),
+  // Lv 9
+  BotColor('stone', 'Stone', null, 9, light: true, background: Color(0xFFF4F4F2), card: Color(0xFFFFFFFF), accent: Color(0xFF5E6B73), bright: Color(0xFF3E484F), flare: Color(0xFFC08457)),
+  BotColor('graphite', 'Graphite', null, 9, light: false, background: Color(0xFF151719), card: Color(0xFF1F2225), accent: Color(0xFFA3AEB6), bright: Color(0xFFD3DADF), flare: Color(0xFFD9A47A)),
+  // Lv 10
+  BotColor('pearl', 'Pearl', null, 10, light: true, background: Color(0xFFF7F6F3), card: Color(0xFFFFFFFF), accent: Color(0xFF8A6D3B), bright: Color(0xFF6A5128), flare: Color(0xFF3E5A8A)),
+  BotColor('royal', 'Royal', null, 10, light: false, background: Color(0xFF10142A), card: Color(0xFF1A1F3B), accent: Color(0xFFD4AF62), bright: Color(0xFFEBD39B), flare: Color(0xFF8FA4E0)),
 ];
 
-BotColor get selectedBotColor {
+/// Day ↔ night partners: each light theme has a dark twin.
+const themePairs = {
+  'auto': 'midnight', 'mint': 'forest', 'sand': 'plum', 'lavender': 'dusk', 'peach': 'ember',
+  'ocean': 'deepsea', 'rose': 'wine', 'sunshine': 'ambernight', 'stone': 'graphite', 'pearl': 'royal',
+};
+
+BotColor _byId(String id) => botColors.firstWhere((b) => b.id == id, orElse: () => botColors.first);
+
+/// The day (light) theme of the chosen colour family.
+BotColor get themeFamily {
   final id = Store.raw.getString('bot_color') ?? 'auto';
-  final c = botColors.firstWhere((b) => b.id == id, orElse: () => botColors.first);
+  final day = themePairs.containsKey(id) ? id : themePairs.entries.firstWhere((e) => e.value == id, orElse: () => const MapEntry('auto', 'midnight')).key;
+  final c = _byId(day);
   return c.unlocked ? c : botColors.first;
+}
+
+/// The family's night twin.
+BotColor nightOf(BotColor day) => _byId(themePairs[day.id] ?? 'midnight');
+
+/// Day / night (true = the dark twin). Follows the phone's dark-mode setting until the user picks one; their
+/// choice is kept from then on.
+bool get nightMode => Store.raw.getBool('theme_night') ?? ui.PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+
+/// The user has picked day or night themselves (otherwise it follows the phone).
+bool get nightModeChosen => Store.raw.getBool('theme_night') != null;
+
+/// The theme on screen: the family's day theme, or its night twin when night mode is on (if unlocked).
+BotColor get selectedBotColor {
+  final day = themeFamily;
+  final night = nightOf(day);
+  return nightMode && night.unlocked ? night : day;
+}
+
+/// Bumped whenever the theme changes; the app rebuilds everything in the new colours.
+final themeChanges = ValueNotifier<int>(0);
+
+/// Recolours the app for the selected theme (call at start, and after picking a theme).
+void applyBotTheme() {
+  final t = selectedBotColor;
+  SystemColors.apply(light: t.light, background: t.background, card: t.card, accent: t.accent, bright: t.bright, flare: t.flare);
+  themeChanges.value++;
+}
+
+/// Picks a colour family by its day theme's id.
+Future<void> selectBotTheme(String id) async {
+  await Store.raw.setString('bot_color', id);
+  applyBotTheme();
+}
+
+/// Saves the user's day / night choice; null goes back to following the phone.
+Future<void> setNightMode(bool? on) async {
+  on == null ? await Store.raw.remove('theme_night') : await Store.raw.setBool('theme_night', on);
+  applyBotTheme();
 }
 
 // ---------------- Weekly boss ----------------

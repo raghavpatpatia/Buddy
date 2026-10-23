@@ -34,7 +34,7 @@ class Txn {
 
 const categories = [
   ('Food', '🍔'), ('Groceries', '🛒'), ('Shopping', '🛍️'), ('Bills', '💡'), ('Rent', '🏠'), ('Travel', '🚕'),
-  ('Fuel', '⛽'), ('Health', '💊'), ('Fun', '🎬'), ('Invest', '📈'), ('Family', '👪'), ('Other', '💸'),
+  ('Fuel', '⛽'), ('Health', '💊'), ('Fun', '🎬'), ('Invest', '📈'), ('Family', '👪'), ('Transfer', '🔁'), ('Other', '💸'),
 ];
 
 String categoryEmoji(String? c) => categories.firstWhere((e) => e.$1 == c, orElse: () => ('', '💸')).$2;

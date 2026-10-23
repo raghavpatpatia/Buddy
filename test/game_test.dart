@@ -1,5 +1,8 @@
+import 'dart:ui' as ui;
+
 import 'package:buddy_app/core/game.dart';
 import 'package:buddy_app/core/store.dart';
+import 'package:flutter/material.dart' show Brightness;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,9 +57,52 @@ void main() {
   });
 
   test('bot colours unlock by level', () async {
-    await Store.raw.setString('bot_color', 'gold'); // locked at level 1
+    await Store.raw.setString('bot_color', 'sand'); // locked at level 1
     expect(selectedBotColor.id, 'auto');
     await Store.raw.setInt('xp', 800); // level 9
-    expect(selectedBotColor.id, 'gold');
+    expect(selectedBotColor.id, 'sand');
+  });
+
+  test('day / night switch flips a colour family to its twin', () async {
+    await Store.raw.setInt('xp', 800); // level 9: everything unlocked
+    await Store.raw.setString('bot_color', 'mint');
+    await Store.raw.setBool('theme_night', false);
+    expect(selectedBotColor.id, 'mint');
+    await Store.raw.setBool('theme_night', true);
+    expect(selectedBotColor.id, 'forest');
+    expect(themeFamily.id, 'mint');
+    // A night id saved by an older version still means its family.
+    await Store.raw.setString('bot_color', 'plum');
+    expect(themeFamily.id, 'sand');
+    expect(selectedBotColor.id, 'plum');
+    await Store.raw.setBool('theme_night', false);
+    expect(selectedBotColor.id, 'sand');
+  });
+
+  test('follows the phone until the user picks day or night', () async {
+    await Store.raw.setInt('xp', 800);
+    await Store.raw.setString('bot_color', 'auto');
+    await Store.raw.remove('theme_night');
+    expect(nightModeChosen, isFalse);
+    expect(nightMode, ui.PlatformDispatcher.instance.platformBrightness == Brightness.dark);
+    await Store.raw.setBool('theme_night', true);
+    expect(nightModeChosen, isTrue);
+    expect(selectedBotColor.id, 'midnight');
+  });
+
+  test('each level unlocks a day + night pair', () async {
+    final pairs = [for (final e in themePairs.entries) (botColors.firstWhere((c) => c.id == e.key), botColors.firstWhere((c) => c.id == e.value))];
+    expect(pairs.map((p) => p.$1.unlockLevel), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    for (final (day, night) in pairs) {
+      expect(day.light, isTrue);
+      expect(night.light, isFalse);
+      expect(night.unlockLevel, day.unlockLevel);
+    }
+    await Store.raw.setInt('xp', 150); // level 2
+    await Store.raw.setString('bot_color', 'sand'); // level 3: not yet
+    await Store.raw.setBool('theme_night', true);
+    expect(selectedBotColor.id, 'midnight');
+    await Store.raw.setString('bot_color', 'mint');
+    expect(selectedBotColor.id, 'forest');
   });
 }

@@ -40,12 +40,12 @@ class _GameLayerState extends State<GameLayer> {
     if (e == null || !mounted) return;
     _toast('+${e.amount} XP');
     if (e.newLevel != null) {
-      final unlocked = botColors.where((c) => c.unlockLevel == e.newLevel).toList();
+      final unlocked = botColors.where((c) => c.unlockLevel == e.newLevel && themePairs.containsKey(c.id)).toList();
       _enqueue(() => _CelebrationDialog(
             emoji: '⚔️',
             title: '[SYSTEM] Level up! Lv ${e.newLevel}',
             subtitle: 'You are now a ${rankFor(e.newLevel!)}.'
-                '${unlocked.isEmpty ? '' : '\nUnlocked: ${unlocked.map((c) => '${c.name} eyes for Buddy').join(', ')} 🎨'}',
+                '${unlocked.isEmpty ? '' : '\nNew theme unlocked: ${unlocked.map((c) => '${c.name} by day, ${nightOf(c).name} by night').join(', ')} 🎨 (Trophies → Theme)'}',
           ));
     }
     if (await damageBoss(e.amount)) {
@@ -136,9 +136,9 @@ class _XpToastState extends State<_XpToast> with SingleTickerProviderStateMixin 
                   boxShadow: [BoxShadow(color: SystemColors.mana.withValues(alpha: 0.45), blurRadius: 14)],
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.bolt, color: SystemColors.manaBright, size: 18),
+                  Icon(Icons.bolt, color: SystemColors.manaBright, size: 18),
                   const SizedBox(width: 4),
-                  Text(widget.text, style: const TextStyle(fontFamily: hudFont, color: SystemColors.manaBright, fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 1)),
+                  Text(widget.text, style: TextStyle(fontFamily: hudFont, color: SystemColors.manaBright, fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 1)),
                 ]),
               ),
             ),

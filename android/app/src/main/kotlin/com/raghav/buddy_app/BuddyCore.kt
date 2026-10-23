@@ -82,6 +82,10 @@ object BuddyCore {
         }
     }
 
+    /** A system screen opened from a notification. */
+    private fun screen(ctx: Context, code: Int, i: Intent): PendingIntent =
+        PendingIntent.getActivity(ctx, code, Intent(i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
     fun openAppIntent(ctx: Context): PendingIntent {
         val i = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
         return PendingIntent.getActivity(ctx, 0, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -94,15 +98,61 @@ object BuddyCore {
         return enabled.split(':').any { android.content.ComponentName.unflattenFromString(it.trim()) == me }
     }
 
-    /** Once a day, tells the user if Android has switched the scroll tracker off. */
-    fun checkScrollTracker(ctx: Context) {
-        val p = prefs(ctx)
-        if (!p.getBoolean("setup_done", false) || scrollTrackerOn(ctx) || p.getString("tracker_off_notified", "") == today()) return
-        p.edit().putString("tracker_off_notified", today()).apply()
-        nudge(ctx, ID_SCROLL, "Scroll tracking is off", "Android switched off Buddy's scroll tracker, so Reels and Shorts aren't being counted. Tap, then Phone → Scroll → Turn on.")
+    /**
+     * Phone makers' own battery managers that force-stop background apps (separate from Android's battery
+     * setting). A force-stop makes Android switch off the app's accessibility service, which is what keeps turning
+     * the scroll tracker off. Returns the one on this phone as (name, screen to allow Buddy in), or null.
+     */
+    fun backgroundKiller(ctx: Context): Pair<String, Intent>? {
+        val known = listOf(
+            "DuraSpeed" to android.content.ComponentName("com.mediatek.duraspeed", "com.mediatek.duraspeed.DuraSpeedMainActivity"),
+            "Autostart" to android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+            "Auto launch" to android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"),
+            "Auto launch" to android.content.ComponentName("com.oplus.safecenter", "com.oplus.safecenter.startupapp.StartupAppListActivity"),
+            "Background apps" to android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
+            "App launch" to android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+        )
+        for ((name, comp) in known) {
+            val i = Intent().setComponent(comp).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (i.resolveActivityInfo(ctx.packageManager, 0)?.exported == true) return name to i
+        }
+        return null
     }
 
-    fun nudge(ctx: Context, id: Int, title: String, text: String) {
+    /**
+     * Checked on every unlock and alarm tick. While the tracker is on, remembers that. When it's found off after
+     * being on, the phone switched it off (usually its battery manager force-stopping Buddy): say so right away,
+     * with one tap to turn it back on and, when we know the culprit, one tap to stop it happening.
+     */
+    fun checkScrollTracker(ctx: Context) {
+        val p = prefs(ctx)
+        if (!p.getBoolean("setup_done", false)) return
+        if (scrollTrackerOn(ctx)) {
+            if (!p.getBoolean("tracker_was_on", false) || p.getBoolean("tracker_off_alerted", false)) {
+                p.edit().putBoolean("tracker_was_on", true).putBoolean("tracker_off_alerted", false).apply()
+                ctx.getSystemService(NotificationManager::class.java).cancel(ID_SCROLL)
+            }
+            return
+        }
+        val wasOn = p.getBoolean("tracker_was_on", false)
+        // Switched off by the phone: once per time it happens. Never set up: at most once a day.
+        if (wasOn && p.getBoolean("tracker_off_alerted", false)) return
+        if (!wasOn && p.getString("tracker_off_notified", "") == today()) return
+        p.edit().putBoolean("tracker_off_alerted", true).putString("tracker_off_notified", today())
+            .putInt("tracker_off_count", p.getInt("tracker_off_count", 0) + (if (wasOn) 1 else 0)).apply()
+        val killer = backgroundKiller(ctx)
+        val why = if (!wasOn) "Buddy's scroll tracker is off, so Reels and Shorts aren't being counted."
+        else if (killer != null) "Your phone's ${killer.first} closed Buddy, and Android switched the scroll tracker off with it."
+        else "Your phone closed Buddy, and Android switched the scroll tracker off with it."
+        nudge(
+            ctx, ID_SCROLL, "Scroll tracking was switched off",
+            "$why Tap to turn it back on (Buddy scroll tracker → On).",
+            open = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            action = killer?.let { "Stop this happening" to it.second },
+        )
+    }
+
+    fun nudge(ctx: Context, id: Int, title: String, text: String, open: Intent? = null, action: Pair<String, Intent>? = null) {
         ensureChannels(ctx)
         val n = NotificationCompat.Builder(ctx, CH_NUDGE)
             .setSmallIcon(R.drawable.ic_stat_buddy)
@@ -112,7 +162,8 @@ object BuddyCore {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSilent(true)
             .setAutoCancel(true)
-            .setContentIntent(openAppIntent(ctx))
+            .setContentIntent(open?.let { screen(ctx, id, it) } ?: openAppIntent(ctx))
+            .apply { action?.let { addAction(0, it.first, screen(ctx, id + 1000, it.second)) } }
             .build()
         ctx.getSystemService(NotificationManager::class.java).notify(id, n)
         vibrate(ctx)

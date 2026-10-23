@@ -29,6 +29,14 @@ class PermissionsController extends SafeNotifier {
   bool nativeOk(String key) => native[key] == true;
 
   Future<void> openSystem(String what) => Native.open(what);
+
+  /// Opened the phone maker's battery manager to allow Buddy (Android can't tell us if it was allowed).
+  bool get killerOpened => Store.raw.getBool('killer_opened') == true;
+  Future<void> openKiller() async {
+    await Store.raw.setBool('killer_opened', true);
+    await Native.open('killer');
+    notifyListeners();
+  }
 }
 
 /// Settings screen: profile and goals, daily growth check, morning brief, and permissions.

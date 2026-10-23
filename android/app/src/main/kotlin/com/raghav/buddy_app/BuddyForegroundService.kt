@@ -18,6 +18,7 @@ class BuddyForegroundService : Service() {
             android.util.Log.i("BuddyGrowth", "unlock event: ${intent.action}")
             BuddyCore.checkBrief(ctx) // first unlock of the morning gets the brief right away
             BuddyCore.checkGrowth(ctx)
+            BuddyCore.checkScrollTracker(ctx) // catch a tracker the phone switched off as soon as you're back
         }
     }
 

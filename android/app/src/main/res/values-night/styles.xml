@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Buddy is always dark: the window behind Flutter stays the System night colour (no white flash). -->
+    <!-- The window behind Flutter uses the day or night background (values/ or values-night/ colors), so there is no flash. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>

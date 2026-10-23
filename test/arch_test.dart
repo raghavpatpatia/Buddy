@@ -96,6 +96,47 @@ void main() {
     expect(await c.syncNow(), 0);
   });
 
+  test('SpendController leaves transfers between own accounts out of spent and received', () async {
+    final t0 = DateTime(2026, 10, 1, 8, 27);
+    final store = MoneyStore(Store.raw);
+    await Store.raw.setInt('money_parse_v', SpendController.parseVersion);
+    final c = SpendController(store: store, sources: [
+      _FakeSource([
+        Txn(id: 'sms_out', amount: 12000, debit: true, at: t0, bank: 'HDFC', source: 'sms'),
+        Txn(id: 'sms_in', amount: 12000, debit: false, at: t0.add(const Duration(minutes: 1)), bank: 'Yes Bank', source: 'sms'),
+        Txn(id: 'sms_food', amount: 300, debit: true, at: t0.add(const Duration(minutes: 2)), bank: 'HDFC', source: 'sms'),
+        // Same amount back into the same bank (a refund) is not a transfer.
+        Txn(id: 'sms_refund', amount: 300, debit: false, at: t0.add(const Duration(minutes: 9)), bank: 'HDFC', source: 'sms'),
+      ]),
+    ]);
+    await c.syncNow();
+    expect(store.txns['sms_out']!.category, 'Transfer');
+    expect(store.txns['sms_in']!.hidden, isTrue);
+    expect(store.txns['sms_food']!.hidden, isFalse);
+    expect(store.txns['sms_refund']!.hidden, isFalse);
+    final m = MonthSummary(store.txns.all.toList());
+    expect(m.spent, 300);
+    expect(m.received, 300);
+  });
+
+  test('new reading rules re-read saved SMS once, keeping the user\'s own choices', () async {
+    final t0 = DateTime(2026, 10, 5, 12);
+    final store = MoneyStore(Store.raw);
+    // Saved by the old rules: a wrongly counted merchant text, and a payment the user had categorised.
+    await store.txns.putAll([
+      Txn(id: 'sms_merchant', amount: 18000, debit: false, at: t0, bank: 'CRIBIN', source: 'sms'),
+      Txn(id: 'sms_food', amount: 300, debit: true, at: t0, bank: 'HDFC', source: 'sms', category: 'Food'),
+      Txn(id: 'cash_1', amount: 50, debit: true, at: t0, bank: 'Cash', source: 'cash'),
+    ]);
+    final c = SpendController(store: store, sources: [
+      _FakeSource([Txn(id: 'sms_food', amount: 300, debit: true, at: t0, bank: 'HDFC', source: 'sms')]),
+    ]);
+    await c.syncNow();
+    expect(store.txns.all.map((t) => t.id).toSet(), {'sms_food', 'cash_1'});
+    expect(store.txns['sms_food']!.category, 'Food');
+    expect(Store.raw.getInt('money_parse_v'), SpendController.parseVersion);
+  });
+
   test('reload() picks up writes made outside this repository (background isolate)', () async {
     final repo = PrefsRepository<String, Holding>(Store.raw, 'h2', Holding.codec, (h) => h.symbol);
     expect(repo.length, 0);

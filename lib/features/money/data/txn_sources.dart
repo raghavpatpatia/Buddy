@@ -31,8 +31,14 @@ class SmsTxnSource implements TxnSource {
     if (!await Permission.sms.isGranted) return const [];
     return [
       for (final m in await Native.bankSms(since.millisecondsSinceEpoch))
-        if (parseTxn(m['body'] as String) case final p?)
-          Txn(id: 'sms_${m['id']}', amount: p.amount, debit: p.debit, at: DateTime.fromMillisecondsSinceEpoch(m['date'] as int), bank: bankName(m['addr'] as String), source: 'sms'),
+        if (isBankSmsSender(m['addr'] as String))
+          if (parseTxn(m['body'] as String) case final p?)
+            Txn(
+              id: 'sms_${m['id']}', amount: p.amount, debit: p.debit, at: DateTime.fromMillisecondsSinceEpoch(m['date'] as int),
+              bank: bankName(m['addr'] as String), source: 'sms',
+              // Savings and investments aren't spending: tagged Invest and left out of the totals.
+              category: p.invest ? 'Invest' : null, hidden: p.invest,
+            ),
     ];
   }
 }

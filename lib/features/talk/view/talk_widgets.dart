@@ -191,12 +191,12 @@ class AuroraState extends State<Aurora> with SingleTickerProviderStateMixin {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: const [Color(0xFF050916), Color(0xFF0B0620)],
+                colors: [SystemColors.void_, SystemColors.panelHigh],
               ),
             ),
             child: Stack(children: [
               for (final (ph, col, r) in dark
-                  ? [(0.0, SystemColors.mana, 0.7), (2.1, SystemColors.shadow, 0.8), (4.2, const Color(0xFF2B4BFF), 0.6)]
+                  ? [(0.0, SystemColors.mana, 0.7), (2.1, SystemColors.shadow, 0.8), (4.2, const Color(0xFF6D28D9), 0.6)]
                   : [(0.0, const Color(0xFF80DEEA), 0.7), (2.1, const Color(0xFFB39DDB), 0.8), (4.2, const Color(0xFFFFCC80), 0.6)])
                 Align(
                   alignment: a(ph, r),
@@ -267,7 +267,7 @@ class CodeBlock extends StatelessWidget {
         width: double.infinity,
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.fromLTRB(10, 4, 4, 10),
-        decoration: BoxDecoration(color: const Color(0xFF060A14), borderRadius: BorderRadius.circular(8), border: Border.all(color: SystemColors.mana.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(color: SystemColors.panelHigh, borderRadius: BorderRadius.circular(8), border: Border.all(color: SystemColors.mana.withValues(alpha: 0.3))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Align(
             alignment: Alignment.centerRight,
@@ -285,7 +285,7 @@ class CodeBlock extends StatelessWidget {
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SelectableText(code, style: const TextStyle(fontFamily: 'monospace', color: Color(0xFFE6EDF3), fontSize: 12.5, height: 1.4)),
+            child: SelectableText(code, style: TextStyle(fontFamily: 'monospace', color: SystemColors.text, fontSize: 12.5, height: 1.4)),
           ),
         ]),
       );

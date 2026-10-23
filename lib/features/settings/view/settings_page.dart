@@ -5,6 +5,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../money/data/mail_service.dart';
 import '../../money/view/connect_sheet.dart';
+import '../../backup/view/backup_card.dart';
+import '../../../shared/theme_picker.dart';
 import '../../../shared/ui.dart';
 import '../controller/settings_controller.dart';
 
@@ -82,6 +84,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
               ],
             ),
           ),
+          const SectionTitle('Appearance'),
+          const AppCard(padding: EdgeInsets.symmetric(vertical: 4), child: NightModeTile()),
           const SectionTitle('Profile'),
           AppCard(
             child: Column(
@@ -214,6 +218,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
               ],
             ),
           ),
+          const SectionTitle('Cloud backup'),
+          const BackupCard(),
           const SectionTitle('Accounts'),
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -233,6 +239,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                 _permTile('Notifications', c.notifications, () => Permission.notification.request().then((_) => c.check())),
                 _permTile('Unrestricted battery', c.native['battery'] == true, () => c.openSystem('battery')),
                 _permTile('Scroll tracker (Accessibility)', c.native['accessibility'] == true, () => c.openSystem('accessibility')),
+                if (c.native['killer'] != null) _permTile('Allowed in ${c.native['killer']}', c.killerOpened, c.openKiller),
                 _permTile('Usage access', c.native['usage'] == true, () => c.openSystem('usage')),
                 _permTile('All files access', c.native['allFiles'] == true, () => c.openSystem('allFiles')),
                 _permTile('Physical activity', c.activity, () => Permission.activityRecognition.request().then((_) => c.check())),
