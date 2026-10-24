@@ -18,6 +18,7 @@ class FoodPage extends StatefulWidget {
 class _FoodPageState extends State<FoodPage> {
   final c = FoodController();
   static const _mealNames = {'b': 'breakfast', 'l': 'lunch', 's': 'a snack', 'd': 'dinner'};
+  static const _slotNames = {'b': 'Breakfast', 'l': 'Lunch', 's': 'Snack', 'd': 'Dinner'};
 
   @override
   void dispose() {
@@ -34,8 +35,8 @@ class _FoodPageState extends State<FoodPage> {
     if (ask != null) await c.suggest(ask);
   }
 
-  Future<void> _logMeal(Dish d, [Map<String, dynamic>? place]) async {
-    await c.logMeal(d, place);
+  Future<void> _logMeal(Dish d, [Map<String, dynamic>? place, String? meal]) async {
+    await c.logMeal(d, place, meal);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logged ${d.name} 🍽️')));
   }
 
@@ -83,9 +84,19 @@ class _FoodPageState extends State<FoodPage> {
           if (suggestions != null) ...[
             SectionTitle('Top picks for ${_mealNames[c.lastAsk?.meal] ?? 'you'}',
                 trailing: TextButton(onPressed: c.clearSuggestions, child: const Text('Clear'))),
+            if (c.aiLoading)
+              const AppCard(
+                child: Row(children: [
+                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('✨ Buddy is thinking up fresh ideas… they\'ll appear here')),
+                ]),
+              ),
+            for (final s in c.aiSuggestions ?? const <Suggestion>[])
+              _SuggestionCard(s: s, rank: 0, onAte: () => _logMeal(s.dish, s.place, c.lastAsk?.meal)),
             if (suggestions.isEmpty)
               const AppCard(child: EmptyState(emoji: '🤔', title: 'No match', subtitle: 'Try "Anywhere" or a different craving.')),
-            for (final (i, s) in suggestions.indexed) _SuggestionCard(s: s, rank: i + 1, onAte: () => _logMeal(s.dish, s.place)),
+            for (final (i, s) in suggestions.indexed) _SuggestionCard(s: s, rank: i + 1, onAte: () => _logMeal(s.dish, s.place, c.lastAsk?.meal)),
           ],
           SectionTitle('Meals today',
               trailing: TextButton.icon(
@@ -105,7 +116,7 @@ class _FoodPageState extends State<FoodPage> {
                 for (final m in meals)
                   ListTile(
                     title: Text(m['name'], style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text('${m['kcal']} kcal · P ${(m['protein'] as num).round()}g${m['place'] != null ? ' · ${m['place']}' : ''}'),
+                    subtitle: Text('${_slotNames[m['meal']] != null ? '${_slotNames[m['meal']]} · ' : ''}${m['kcal']} kcal · P ${(m['protein'] as num).round()}g${m['place'] != null ? ' · ${m['place']}' : ''}'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () => c.removeMeal(m),
@@ -178,7 +189,7 @@ class _SuggestionCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            CircleAvatar(radius: 14, child: Text('$rank', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800))),
+            CircleAvatar(radius: 14, child: Text(rank == 0 ? '✨' : '$rank', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800))),
             const SizedBox(width: 10),
             Expanded(child: Text(d.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
             _pill('❤ ${d.healthScore.toStringAsFixed(1)}', d.healthScore >= 7 ? Colors.green : d.healthScore >= 5 ? Colors.amber : Colors.red),
@@ -246,7 +257,7 @@ class _AskSheetState extends State<_AskSheet> {
           Text('Quick questions 🍽️', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           _q('Which meal?', {'b': 'Breakfast', 'l': 'Lunch', 's': 'Snack', 'd': 'Dinner'}, a.meal, (v) => a.meal = v),
           _q('How hungry?', {'light': 'A bit', 'normal': 'Normal', 'heavy': 'Starving'}, a.hunger, (v) => a.hunger = v),
-          _q('Where?', {'any': 'Anywhere', 'out': 'Eat out (my places)', 'home': 'Home / order'}, a.where,
+          _q('Where?', {'any': 'Anywhere', 'out': 'Eat out (nearby + my places)', 'home': 'Home / order'}, a.where,
               (v) => a.where = v),
           _q('Craving?', {for (final c in cuisines) c: c}, a.cuisine, (v) => a.cuisine = v),
           const SizedBox(height: 20),

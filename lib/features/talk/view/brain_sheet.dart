@@ -6,6 +6,8 @@ import '../controller/brain_settings_controller.dart';
 import '../data/cloud_brain.dart';
 import '../model/brain_model.dart';
 import 'cloud_card.dart';
+import 'gemini_card.dart';
+import 'openrouter_card.dart';
 
 /// Buddy's brain settings: cloud brain, on-device models, coder, speed test, voice and language.
 class BrainSheet extends StatefulWidget {
@@ -37,6 +39,10 @@ class _BrainSheetState extends State<BrainSheet> {
         Text(CloudBrain.enabled ? 'Cloud first (AWS Bedrock), on-device when a limit is hit or offline.' : 'Runs fully on your phone. Your chats never leave it.', style: tt.bodySmall),
         const SizedBox(height: 12),
         CloudCard(onChanged: () => setState(() {})),
+        const SizedBox(height: 12),
+        const GeminiCard(),
+        const SizedBox(height: 12),
+        const OpenRouterCard(),
         const SizedBox(height: 12),
         Text('Main brain', style: tt.labelLarge),
         const SizedBox(height: 6),
